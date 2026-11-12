@@ -1,14 +1,21 @@
 import { io, Socket } from 'socket.io-client';
-import { ArenaTheme, GameSnapshot, PlayerState, RoomSummary } from '../shared/types.js';
+import { ArenaTheme, GameSnapshot, PlayerInput, RoomSummary } from '../shared/types.js';
 import { Renderer } from './rendering/Renderer.js';
 import { SoundFx } from './audio/SoundFx.js';
 import { InputHandler } from './input/InputHandler.js';
+import { GameState } from '../server/GameState.js';
+import { BotAI } from '../server/BotAI.js';
 
 class BombermanApp {
   private socket: Socket;
   private renderer: Renderer;
   private soundFx: SoundFx;
   private inputHandler: InputHandler;
+
+  private isConnectedToServer: boolean = false;
+  private isLocalMode: boolean = false;
+  private localState: GameState | null = null;
+  private localBots: Map<string, BotAI> = new Map();
 
   private currentRoomId: string | null = null;
   private myPlayerId: string | null = null;
@@ -22,7 +29,11 @@ class BombermanApp {
   private prevMyAlive: boolean = true;
 
   constructor() {
-    this.socket = io();
+    this.socket = io({
+      timeout: 3000,
+      reconnectionAttempts: 3
+    });
+
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.renderer = new Renderer(canvas);
     this.soundFx = new SoundFx();
@@ -54,23 +65,37 @@ class BombermanApp {
     // Quick Play with Bots
     const quickPlayBtn = document.getElementById('btn-quick-play') as HTMLButtonElement;
     quickPlayBtn.addEventListener('click', () => {
-      const name = (document.getElementById('input-name') as HTMLInputElement).value || 'Bomber';
-      this.socket.emit('create_room', {
-        name,
-        arena: this.selectedArena,
-        maxPlayers: 4,
-        fillWithBots: true
-      });
-      // Immediately request start for quick play
-      setTimeout(() => {
-        this.socket.emit('start_game');
-      }, 150);
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+
+      if (this.isConnectedToServer) {
+        this.isLocalMode = false;
+        this.socket.emit('create_room', {
+          name,
+          arena: this.selectedArena,
+          maxPlayers: 4,
+          fillWithBots: true
+        });
+        setTimeout(() => {
+          this.socket.emit('start_game');
+        }, 150);
+      } else {
+        // Run locally in browser (works 100% on Vercel without a WebSocket server)
+        this.startLocalGame(name, this.selectedArena);
+      }
     });
 
     // Create Multiplayer Room
     const createRoomBtn = document.getElementById('btn-create-room') as HTMLButtonElement;
     createRoomBtn.addEventListener('click', () => {
-      const name = (document.getElementById('input-name') as HTMLInputElement).value || 'Bomber';
+      if (!this.isConnectedToServer) {
+        alert('Servidor multiplayer em tempo real não detectado nesta hospedagem. Iniciando modo com bots locais...');
+        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+        this.startLocalGame(name, this.selectedArena);
+        return;
+      }
+
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+      this.isLocalMode = false;
       this.socket.emit('create_room', {
         name,
         arena: this.selectedArena,
@@ -82,9 +107,13 @@ class BombermanApp {
     // Join Room by Code
     const joinRoomBtn = document.getElementById('btn-join-room') as HTMLButtonElement;
     joinRoomBtn.addEventListener('click', () => {
+      if (!this.isConnectedToServer) {
+        return alert('Multiplayer online requer conexão com servidor ativo.');
+      }
       const code = (document.getElementById('input-room-code') as HTMLInputElement).value.trim().toUpperCase();
-      const name = (document.getElementById('input-name') as HTMLInputElement).value || 'Bomber';
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
       if (!code) return alert('Por favor, informe o código da sala.');
+      this.isLocalMode = false;
       this.socket.emit('join_room', { roomId: code, name });
     });
 
@@ -114,7 +143,12 @@ class BombermanApp {
     const playAgainBtn = document.getElementById('btn-play-again') as HTMLButtonElement;
     playAgainBtn.addEventListener('click', () => {
       document.getElementById('modal-gameover')?.classList.remove('active');
-      this.socket.emit('restart_game', { arena: this.selectedArena });
+      if (this.isLocalMode) {
+        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+        this.startLocalGame(name, this.selectedArena);
+      } else {
+        this.socket.emit('restart_game', { arena: this.selectedArena });
+      }
     });
 
     const backLobbyBtn = document.getElementById('btn-back-lobby') as HTMLButtonElement;
@@ -123,7 +157,40 @@ class BombermanApp {
     });
   }
 
+  private startLocalGame(playerName: string, arena: ArenaTheme): void {
+    this.isLocalMode = true;
+    this.localState = new GameState(arena);
+    this.localBots.clear();
+
+    const me = this.localState.addPlayer('player_local', playerName, false);
+    this.myPlayerId = me.id;
+
+    // Add 3 Intelligent AI Bots
+    const botNames = ['MechaBomber', 'CyberBot', 'DynamiteAI'];
+    for (let i = 0; i < 3; i++) {
+      const botId = `bot_local_${i + 1}`;
+      this.localState.addPlayer(botId, botNames[i], true);
+      this.localBots.set(botId, new BotAI(botId));
+    }
+
+    this.localState.startGame();
+    this.showScreen('screen-game');
+    document.getElementById('modal-gameover')?.classList.remove('active');
+  }
+
   private bindSocket(): void {
+    this.socket.on('connect', () => {
+      this.isConnectedToServer = true;
+    });
+
+    this.socket.on('disconnect', () => {
+      this.isConnectedToServer = false;
+    });
+
+    this.socket.on('connect_error', () => {
+      this.isConnectedToServer = false;
+    });
+
     this.socket.on('rooms_list', (rooms: RoomSummary[]) => {
       this.updateRoomsListUI(rooms);
     });
@@ -157,14 +224,20 @@ class BombermanApp {
     });
 
     this.socket.on('game_state', (snapshot: GameSnapshot) => {
-      this.handleSnapshotAudio(snapshot);
-      this.lastSnapshot = snapshot;
-      this.updateHUD(snapshot);
-
-      if (snapshot.phase === 'game_over') {
-        this.showGameOverModal(snapshot);
+      if (!this.isLocalMode) {
+        this.processSnapshot(snapshot);
       }
     });
+  }
+
+  private processSnapshot(snapshot: GameSnapshot): void {
+    this.handleSnapshotAudio(snapshot);
+    this.lastSnapshot = snapshot;
+    this.updateHUD(snapshot);
+
+    if (snapshot.phase === 'game_over') {
+      this.showGameOverModal(snapshot);
+    }
   }
 
   private handleSnapshotAudio(snapshot: GameSnapshot): void {
@@ -177,9 +250,8 @@ class BombermanApp {
     // Explosions detonated
     if (snapshot.explosions.length > this.prevExplosionCount) {
       this.soundFx.playExplosion();
-      // Particle shockwave
       const newestExp = snapshot.explosions[snapshot.explosions.length - 1];
-      const center = newestExp.cells[0];
+      const center = newestExp?.cells[0];
       if (center) {
         this.renderer.particles.emitExplosion(
           center.gx * 48 + 24,
@@ -207,12 +279,10 @@ class BombermanApp {
   }
 
   private updateHUD(snapshot: GameSnapshot): void {
-    // Alive counter
     const alivePlayers = snapshot.players.filter(p => p.alive);
     const aliveEl = document.getElementById('hud-alive-count');
     if (aliveEl) aliveEl.textContent = `${alivePlayers.length} / ${snapshot.players.length}`;
 
-    // Timer display
     const timerEl = document.getElementById('hud-timer');
     if (timerEl) {
       const minutes = Math.floor(snapshot.timer / 60).toString().padStart(2, '0');
@@ -227,7 +297,6 @@ class BombermanApp {
       }
     }
 
-    // Local player power-ups
     const me = snapshot.players.find(p => p.id === this.myPlayerId);
     if (me) {
       const bombsEl = document.getElementById('hud-bombs');
@@ -243,7 +312,6 @@ class BombermanApp {
       if (kickEl) kickEl.style.display = me.powerUps.canKick ? 'inline' : 'none';
     }
 
-    // Room screen player list update if in room
     if (snapshot.phase === 'waiting') {
       const pList = document.getElementById('room-players-list');
       const countEl = document.getElementById('room-player-count');
@@ -321,7 +389,7 @@ class BombermanApp {
       `;
 
       div.querySelector('button')?.addEventListener('click', () => {
-        const name = (document.getElementById('input-name') as HTMLInputElement).value || 'Bomber';
+        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
         this.socket.emit('join_room', { roomId: r.id, name });
       });
 
@@ -341,9 +409,26 @@ class BombermanApp {
       const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
       lastTime = currentTime;
 
-      // Send Input to server if playing
-      if (this.lastSnapshot?.phase === 'playing') {
-        const input = this.inputHandler.getInput();
+      const input = this.inputHandler.getInput();
+
+      // If playing locally in browser (Vercel / Offline mode)
+      if (this.isLocalMode && this.localState && this.localState.phase === 'playing') {
+        // Step bots
+        for (const [botId, ai] of this.localBots.entries()) {
+          const botInput = ai.computeInput(this.localState, dt);
+          this.localState.handleInput(botId, botInput);
+        }
+
+        // Apply local player input
+        this.localState.handleInput(this.myPlayerId || 'player_local', input);
+
+        // Update local physics & explosions
+        this.localState.update(dt);
+
+        const snapshot = this.localState.getSnapshot();
+        this.processSnapshot(snapshot);
+      } else if (!this.isLocalMode && this.lastSnapshot?.phase === 'playing') {
+        // Send input to online server
         this.socket.emit('player_input', input);
       }
 

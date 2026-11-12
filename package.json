@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server/server.ts",
-    "build": "vite build && tsc -p tsconfig.server.json",
-    "start": "node dist/server/server.js",
-    "test": "node --import tsx --test src/server/__tests__/*.test.ts"
+    "build": "vite build",
+    "start": "tsx src/server/server.ts",
+    "test": "node --import tsx --test src/server/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",

@@ -63,9 +63,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.resolve(projectRoot, 'dist/client')));
+    app.use(express.static(path.resolve(projectRoot, 'dist')));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(projectRoot, 'dist/client/index.html'));
+      res.sendFile(path.resolve(projectRoot, 'dist/index.html'));
     });
   }
 
