@@ -6,6 +6,7 @@ export class Sprites {
   private static powerupsSheetImg: HTMLImageElement | null = null;
   private static tileImages: Record<string, HTMLImageElement> = {};
   private static powerUpImages: Record<string, HTMLImageElement> = {};
+  private static fxImages: Record<string, HTMLImageElement> = {};
 
   public static init(): void {
     if (typeof window === 'undefined') return;
@@ -16,11 +17,12 @@ export class Sprites {
     this.powerupsSheetImg = new Image();
     this.powerupsSheetImg.src = '/assets/powerups.jpg';
 
-    // Load individual pixel art tile assets for all 3 arenas
+    // Load individual pixel art tile assets for all 3 arenas & mechanisms
     const tileNames = [
       'classic_floor', 'classic_wall', 'classic_block',
-      'magma_floor', 'magma_wall', 'magma_block', 'magma_tnt',
-      'cyber_floor', 'cyber_wall', 'cyber_block', 'cyber_conveyor', 'cyber_portal'
+      'magma_floor', 'magma_wall', 'magma_block', 'magma_tnt', 'foundry_conveyor',
+      'cyber_floor', 'cyber_wall', 'cyber_block', 'cryo_ice', 'cyber_conveyor', 'cyber_portal',
+      'sudden_death_block'
     ];
     for (const name of tileNames) {
       const img = new Image();
@@ -28,7 +30,20 @@ export class Sprites {
       this.tileImages[name] = img;
     }
 
-    // Load dedicated crisp cropped power-up icon PNGs
+    // Load dedicated crisp pixel-art bomb and explosion FX sprites
+    const fxNames = [
+      'bomb_idle', 'bomb_warm', 'bomb_flash',
+      'exp_center', 'exp_horizontal', 'exp_vertical',
+      'exp_end_up', 'exp_end_down', 'exp_end_left', 'exp_end_right',
+      'smoke'
+    ];
+    for (const name of fxNames) {
+      const img = new Image();
+      img.src = `/assets/fx/${name}.png`;
+      this.fxImages[name] = img;
+    }
+
+    // Load dedicated crisp standalone power-up icon PNGs
     const powerUpNames = ['bomb_up', 'fire_up', 'speed_up', 'bomb_kick', 'shield', 'skull'];
     for (const name of powerUpNames) {
       const img = new Image();
@@ -43,7 +58,7 @@ export class Sprites {
     return 'classic_block';
   }
 
-  // Draw Arena Floor & Static Tiles using high-res pixel art assets
+  // Draw Arena Floor & Static Tiles using crisp 16-bit pixel art assets
   public static drawTile(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -91,7 +106,7 @@ export class Sprites {
       case TileType.CONVEYOR_DOWN:
       case TileType.CONVEYOR_LEFT:
       case TileType.CONVEYOR_RIGHT:
-        this.drawConveyor(ctx, x, y, tile, animTime);
+        this.drawConveyor(ctx, x, y, tile, arena, animTime);
         break;
       case TileType.TELEPORT_A:
       case TileType.TELEPORT_B:
@@ -125,9 +140,9 @@ export class Sprites {
     const pad = 3;
     const size = TILE_SIZE - pad * 2; // 42x42 crate nested inside 48x48 floor cell
 
-    // Subtle ground drop shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(x + pad + 1, y + pad + 2, size, size);
+    // Subtle ground drop shadow tucked cleanly under southeast crate base
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
+    ctx.fillRect(x + pad + 2, y + pad + 3, size - 2, size - 2);
 
     const key = this.getSoftBlockKey(arena);
     const blockImg = this.tileImages[key];
@@ -143,25 +158,22 @@ export class Sprites {
   }
 
   private static drawIceFloor(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
+    const iceImg = this.tileImages['cryo_ice'];
+    if (iceImg && iceImg.complete && iceImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.drawImage(iceImg, x, y, TILE_SIZE, TILE_SIZE);
+      // Subtle animated frost sparkle highlight on ice crystals
+      const glint = 0.28 + 0.25 * Math.sin(animTime * 3.2 + x * 0.08 + y * 0.05);
+      ctx.strokeStyle = `rgba(224, 242, 254, ${glint})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 1.5, y + 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
+      ctx.restore();
+      return;
+    }
+
     ctx.save();
-    // Crisp frosted ice glaze overlay over cyber tile floor (solid colors, zero gradients)
     ctx.fillStyle = 'rgba(14, 116, 144, 0.72)';
     ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-
-    ctx.fillStyle = 'rgba(165, 243, 252, 0.25)';
-    ctx.fillRect(x + 3, y + 3, TILE_SIZE - 6, 4);
-
-    // Crystalline frost glint lines
-    const glint = 0.55 + 0.3 * Math.sin(animTime * 3 + x * 0.1);
-    ctx.strokeStyle = `rgba(165, 243, 252, ${glint})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x + 7, y + TILE_SIZE - 8);
-    ctx.lineTo(x + TILE_SIZE - 8, y + 7);
-    ctx.moveTo(x + 18, y + TILE_SIZE - 8);
-    ctx.lineTo(x + TILE_SIZE - 8, y + 18);
-    ctx.stroke();
-
     ctx.strokeStyle = '#22d3ee';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 1.5, y + 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
@@ -173,7 +185,7 @@ export class Sprites {
     const size = TILE_SIZE - 12; // 36x36 barrel prop grounded neatly inside tile
 
     // Ground shadow under TNT barrel
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
     ctx.beginPath();
     ctx.ellipse(x + TILE_SIZE / 2, y + TILE_SIZE - 7, size * 0.42, 4.5, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -197,9 +209,11 @@ export class Sprites {
     x: number,
     y: number,
     tile: TileType,
+    arena: ArenaTheme,
     animTime: number
   ): void {
-    const conveyorImg = this.tileImages['cyber_conveyor'];
+    const conveyorKey = (arena === 'foundry' || arena === 'magma') ? 'foundry_conveyor' : 'cyber_conveyor';
+    const conveyorImg = this.tileImages[conveyorKey] || this.tileImages['cyber_conveyor'];
     const cx = x + TILE_SIZE / 2;
     const cy = y + TILE_SIZE / 2;
 
@@ -213,25 +227,18 @@ export class Sprites {
     ctx.translate(cx, cy);
     ctx.rotate(angle);
 
+    // Clip to cell bounds so seamless belt scrolling loops crisply along +X
+    ctx.beginPath();
+    ctx.rect(-TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+    ctx.clip();
+
     if (conveyorImg && conveyorImg.complete && conveyorImg.naturalWidth > 0) {
-      ctx.drawImage(conveyorImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      const scrollOffset = (animTime * 36) % TILE_SIZE;
+      ctx.drawImage(conveyorImg, -TILE_SIZE / 2 + scrollOffset, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.drawImage(conveyorImg, -TILE_SIZE / 2 + scrollOffset - TILE_SIZE, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
     } else {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(-TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
-    }
-
-    // Animated directional chevron ticks moving along +X (rotated cleanly)
-    const scrollOffset = ((animTime * 42) % 16) - 8;
-    ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
-    ctx.lineWidth = 2;
-    for (let i = -1; i <= 1; i++) {
-      const ox = i * 14 + scrollOffset;
-      if (ox < -16 || ox > 16) continue;
-      ctx.beginPath();
-      ctx.moveTo(ox - 4, -7);
-      ctx.lineTo(ox + 3, 0);
-      ctx.lineTo(ox - 4, 7);
-      ctx.stroke();
     }
 
     ctx.restore();
@@ -277,6 +284,12 @@ export class Sprites {
   }
 
   private static drawSuddenDeathBlock(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    const sdImg = this.tileImages['sudden_death_block'];
+    if (sdImg && sdImg.complete && sdImg.naturalWidth > 0) {
+      ctx.drawImage(sdImg, x, y, TILE_SIZE, TILE_SIZE);
+      return;
+    }
+
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
@@ -343,7 +356,7 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw Bomb at smooth world coordinates with balanced proportions & <0.8s telegraph pulse
+  // Draw Pixel Art Bomb at smooth world coordinates with <0.8s telegraph pulse & sliding cue
   public static drawBomb(
     ctx: CanvasRenderingContext2D,
     worldX: number,
@@ -353,11 +366,11 @@ export class Sprites {
     isSliding: boolean = false
   ): void {
     const cx = worldX;
-    const cy = worldY + 3; // sit slightly grounded near tile floor center
+    const cy = worldY + 2; // sit slightly grounded near tile floor center
 
     const isTelegraphing = fuseTimer <= 0.8;
     const pulseRate = isTelegraphing ? 28 : (fuseTimer < 1.5 ? 12 : 6);
-    const scale = 1 + (isTelegraphing ? 0.14 : 0.06) * Math.sin(animTime * pulseRate);
+    const scale = 1 + (isTelegraphing ? 0.13 : 0.05) * Math.sin(animTime * pulseRate);
     const radius = 11 * scale;
 
     ctx.save();
@@ -367,62 +380,46 @@ export class Sprites {
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, radius + 3.5, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 1, radius + 3.5, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillStyle = 'rgba(0,0,0,0.40)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 10.5, radius, radius * 0.42, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 11.5, radius, radius * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bomb body (Solid colors, zero gradients)
+    // Select pixel sprite frame for idle / warm / telegraph flash
+    let frameKey = 'bomb_idle';
+    if (isTelegraphing) {
+      frameKey = Math.sin(animTime * 28) > 0 ? 'bomb_flash' : 'bomb_warm';
+    } else if (fuseTimer < 1.5) {
+      frameKey = Math.sin(animTime * 10) > 0 ? 'bomb_warm' : 'bomb_idle';
+    }
+
+    const bombImg = this.fxImages[frameKey] || this.fxImages['bomb_idle'];
+    if (bombImg && bombImg.complete && bombImg.naturalWidth > 0) {
+      const size = 28 * scale;
+      ctx.drawImage(bombImg, cx - size / 2, cy - size / 2, size, size);
+      ctx.restore();
+      return;
+    }
+
+    // Vector fallback
     const isFlashing = isTelegraphing && Math.sin(animTime * 28) > 0;
     ctx.fillStyle = isFlashing ? '#ef4444' : '#0a0a0b';
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy + 1, radius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = isFlashing ? '#fca5a5' : '#242428';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-
-    // Highlight pixel
-    ctx.fillStyle = isFlashing ? '#ffffff' : '#52525b';
-    ctx.beginPath();
-    ctx.arc(cx - 3.5, cy - 3.5, 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cap
-    ctx.fillStyle = '#71717a';
-    ctx.fillRect(cx - 3.5, cy - radius - 2, 7, 3);
-
-    // Compact fuse wick
-    ctx.strokeStyle = '#d97706';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - radius - 1);
-    ctx.quadraticCurveTo(cx + 3.5, cy - radius - 4.5, cx + 2, cy - radius - 6.5);
-    ctx.stroke();
-
-    // Spark tip
-    const sparkX = cx + 2;
-    const sparkY = cy - radius - 6.5;
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath();
-    ctx.arc(sparkX, sparkY, 2.8 + 1.1 * Math.sin(animTime * 20), 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(sparkX, sparkY, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-
     ctx.restore();
   }
 
-  // Draw directional connected explosion beam segments (center, horizontal, vertical, ends)
+  // Draw directional connected pixel-art explosion beam segments (center, horizontal, vertical, ends)
   public static drawExplosionSegment(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -432,10 +429,25 @@ export class Sprites {
   ): void {
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
-    const flicker = 0.88 + 0.12 * Math.sin(animTime * 34);
+    const flicker = 0.90 + 0.10 * Math.sin(animTime * 36);
 
     ctx.save();
     ctx.globalAlpha = flicker;
+
+    let fxKey = 'exp_center';
+    if (direction === 'horizontal') fxKey = 'exp_horizontal';
+    else if (direction === 'vertical') fxKey = 'exp_vertical';
+    else if (direction === 'end_up') fxKey = 'exp_end_up';
+    else if (direction === 'end_down') fxKey = 'exp_end_down';
+    else if (direction === 'end_left') fxKey = 'exp_end_left';
+    else if (direction === 'end_right') fxKey = 'exp_end_right';
+
+    const expImg = this.fxImages[fxKey];
+    if (expImg && expImg.complete && expImg.naturalWidth > 0) {
+      ctx.drawImage(expImg, x, y, TILE_SIZE, TILE_SIZE);
+      ctx.restore();
+      return;
+    }
 
     const outerColor = '#ea580c';
     const midColor = '#facc15';
@@ -455,48 +467,13 @@ export class Sprites {
       ctx.fillRect(x + 10, y, TILE_SIZE - 20, TILE_SIZE);
       ctx.fillStyle = coreColor;
       ctx.fillRect(x + 17, y, TILE_SIZE - 34, TILE_SIZE);
-    } else if (direction === 'end_up') {
-      ctx.fillStyle = outerColor;
-      ctx.fillRect(x + 4, y + 6, TILE_SIZE - 8, TILE_SIZE - 6);
-      ctx.fillRect(x + 10, y + 2, TILE_SIZE - 20, 6);
-      ctx.fillStyle = midColor;
-      ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 10);
-      ctx.fillStyle = coreColor;
-      ctx.fillRect(x + 17, y + 16, TILE_SIZE - 34, TILE_SIZE - 16);
-    } else if (direction === 'end_down') {
-      ctx.fillStyle = outerColor;
-      ctx.fillRect(x + 4, y, TILE_SIZE - 8, TILE_SIZE - 6);
-      ctx.fillRect(x + 10, y + TILE_SIZE - 8, TILE_SIZE - 20, 6);
-      ctx.fillStyle = midColor;
-      ctx.fillRect(x + 10, y, TILE_SIZE - 20, TILE_SIZE - 10);
-      ctx.fillStyle = coreColor;
-      ctx.fillRect(x + 17, y, TILE_SIZE - 34, TILE_SIZE - 16);
-    } else if (direction === 'end_left') {
-      ctx.fillStyle = outerColor;
-      ctx.fillRect(x + 6, y + 4, TILE_SIZE - 6, TILE_SIZE - 8);
-      ctx.fillRect(x + 2, y + 10, 6, TILE_SIZE - 20);
-      ctx.fillStyle = midColor;
-      ctx.fillRect(x + 10, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
-      ctx.fillStyle = coreColor;
-      ctx.fillRect(x + 16, y + 17, TILE_SIZE - 16, TILE_SIZE - 34);
-    } else if (direction === 'end_right') {
-      ctx.fillStyle = outerColor;
-      ctx.fillRect(x, y + 4, TILE_SIZE - 6, TILE_SIZE - 8);
-      ctx.fillRect(x + TILE_SIZE - 8, y + 10, 6, TILE_SIZE - 20);
-      ctx.fillStyle = midColor;
-      ctx.fillRect(x, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
-      ctx.fillStyle = coreColor;
-      ctx.fillRect(x, y + 17, TILE_SIZE - 16, TILE_SIZE - 34);
     } else {
-      // 'center' full cross intersection core
       ctx.fillStyle = outerColor;
-      ctx.fillRect(x, y + 4, TILE_SIZE, TILE_SIZE - 8);
-      ctx.fillRect(x + 4, y, TILE_SIZE - 8, TILE_SIZE);
+      ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
       ctx.fillStyle = midColor;
-      ctx.fillRect(x + 5, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
-      ctx.fillRect(x + 10, y + 5, TILE_SIZE - 20, TILE_SIZE - 10);
+      ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 20);
       ctx.fillStyle = coreColor;
-      ctx.fillRect(x + 14, y + 14, TILE_SIZE - 28, TILE_SIZE - 28);
+      ctx.fillRect(x + 16, y + 16, TILE_SIZE - 32, TILE_SIZE - 32);
     }
 
     ctx.restore();
@@ -616,7 +593,7 @@ export class Sprites {
 
     const bounce = isWinner
       ? Math.abs(Math.sin(animTime * 10)) * 5
-      : (isMoving ? Math.abs(Math.sin(animTime * 14)) * 2.5 : 0);
+      : (isMoving ? Math.abs(Math.sin(animTime * 14)) * 1.2 : 0);
     const py = y - bounce;
 
     // Ground Shadow under boots
@@ -645,25 +622,32 @@ export class Sprites {
       ctx.stroke();
     }
 
-    // Crop from characters sprite sheet preserving natural 2:3 vertical proportions (36x54 inside 48px cell)
+    // Crop from animated 9x6 characters sprite sheet (exact 2:3 vertical proportions 36x54)
     if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
       const img = this.charactersImg;
-      const colWidth = img.naturalWidth / 6;
-      const rowHeight = img.naturalHeight / 4;
-
-      let col = 0;
-      if (color.includes('ef4444') || color.includes('red')) col = 0;
-      else if (color.includes('3b82f6') || color.includes('blue')) col = 1;
-      else if (color.includes('10b981') || color.includes('green')) col = 2;
-      else if (color.includes('f59e0b') || color.includes('yellow')) col = 3;
-      else if (color.includes('8b5cf6') || color.includes('purple')) col = 4;
-      else col = 5;
+      const colWidth = img.naturalWidth / 9;
+      const rowHeight = img.naturalHeight / 6;
 
       let row = 0;
-      if (isWinner) row = 3;
-      else if (facing === 'down') row = 0;
-      else if (facing === 'up') row = 2;
-      else row = 1;
+      if (color.includes('ef4444') || color.includes('red')) row = 0;
+      else if (color.includes('3b82f6') || color.includes('blue')) row = 1;
+      else if (color.includes('10b981') || color.includes('green')) row = 2;
+      else if (color.includes('f59e0b') || color.includes('yellow')) row = 3;
+      else if (color.includes('8b5cf6') || color.includes('purple')) row = 4;
+      else row = 5;
+
+      // Cols: 0=front_idle, 1=front_w1, 2=front_w2, 3=side_w1, 4=side_w2, 5=back_idle, 6=back_w1, 7=back_w2, 8=victory
+      let col = 0;
+      const step = Math.floor(animTime * 9) % 4;
+      if (isWinner) {
+        col = 8;
+      } else if (facing === 'down') {
+        col = !isMoving ? 0 : (step === 0 ? 1 : step === 2 ? 2 : 0);
+      } else if (facing === 'up') {
+        col = !isMoving ? 5 : (step === 0 ? 6 : step === 2 ? 7 : 5);
+      } else {
+        col = !isMoving ? 3 : (Math.floor(animTime * 8) % 2 === 0 ? 3 : 4);
+      }
 
       const flip = !isWinner && facing === 'left';
 
