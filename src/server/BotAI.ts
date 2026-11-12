@@ -7,10 +7,15 @@ interface Point {
   gy: number;
 }
 
+interface PathNode {
+  gx: number;
+  gy: number;
+  parent: PathNode | null;
+}
+
 export class BotAI {
   private botId: string;
   private actionCooldown: number = 0;
-  private targetTile: Point | null = null;
 
   constructor(botId: string) {
     this.botId = botId;
@@ -28,38 +33,40 @@ export class BotAI {
     const botGx = Math.floor(bot.x / TILE_SIZE);
     const botGy = Math.floor(bot.y / TILE_SIZE);
 
-    // 1. Build Danger Grid
+    // 1. Build Danger Grid of real active hazards
     const dangerGrid = this.buildDangerGrid(state);
-    const isCurrentlyInDanger = dangerGrid[botGy]?.[botGx] > 0;
+    const isCurrentlyInDanger = (dangerGrid[botGy]?.[botGx] ?? 0) > 0;
 
-    // 2. High Priority: Evade Danger!
+    // 2. High Priority: Evade Danger immediately using step-by-step BFS path
     if (isCurrentlyInDanger) {
-      const safeTile = this.findNearestSafeTile(state, botGx, botGy, dangerGrid);
-      if (safeTile) {
-        return this.moveTowardTile(bot, safeTile.gx, safeTile.gy, false);
+      const nextStep = this.findImmediateStepToSafety(state, botGx, botGy, dangerGrid);
+      if (nextStep) {
+        return this.moveTowardTile(bot, nextStep.gx, nextStep.gy, false);
       }
     }
 
     // 3. If safe, decide whether to place a bomb
     if (this.actionCooldown <= 0 && bot.activeBombs < bot.powerUps.bombLimit) {
-      if (this.shouldPlaceBomb(state, botGx, botGy, dangerGrid)) {
-        this.actionCooldown = 1.2; // Don't spam immediately
-        return { ...this.moveTowardTile(bot, botGx, botGy, false), placeBomb: true };
+      const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerGrid);
+      if (escapeStep) {
+        this.actionCooldown = 1.4; // Cooldown to ensure escape
+        // Drop bomb and immediately step toward escape route!
+        return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
       }
     }
 
-    // 4. Seek nearest Power-Up
+    // 4. Seek nearest Power-Up if safe
     if (state.powerUps.length > 0) {
-      const nearestPowerUp = this.findNearestPowerUp(state, botGx, botGy, dangerGrid);
-      if (nearestPowerUp) {
-        return this.moveTowardTile(bot, nearestPowerUp.gx, nearestPowerUp.gy, false);
+      const nextStep = this.findStepTowardPowerUp(state, botGx, botGy, dangerGrid);
+      if (nextStep) {
+        return this.moveTowardTile(bot, nextStep.gx, nextStep.gy, false);
       }
     }
 
     // 5. Seek nearest opponent or soft block
-    const target = this.findTargetTile(state, botGx, botGy, dangerGrid);
-    if (target) {
-      return this.moveTowardTile(bot, target.gx, target.gy, false);
+    const targetStep = this.findStepTowardTarget(state, botGx, botGy, dangerGrid);
+    if (targetStep) {
+      return this.moveTowardTile(bot, targetStep.gx, targetStep.gy, false);
     }
 
     return defaultInput;
@@ -70,7 +77,7 @@ export class BotAI {
       Array(GRID_COLS).fill(0)
     );
 
-    // Active explosions (maximum danger)
+    // Active explosions (maximum hazard)
     for (const exp of state.explosions) {
       for (const cell of exp.cells) {
         if (cell.gy >= 0 && cell.gy < GRID_ROWS && cell.gx >= 0 && cell.gx < GRID_COLS) {
@@ -79,52 +86,62 @@ export class BotAI {
       }
     }
 
-    // Active bombs danger rays
+    // Active bombs blast paths
     for (const bomb of state.bombs) {
-      danger[bomb.gy][bomb.gx] = Math.max(danger[bomb.gy][bomb.gx], 80);
-
-      const dirs = [
-        { dx: 0, dy: -1 },
-        { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 },
-        { dx: 1, dy: 0 }
-      ];
-
-      for (const d of dirs) {
-        for (let dist = 1; dist <= bomb.fireRange; dist++) {
-          const gx = bomb.gx + d.dx * dist;
-          const gy = bomb.gy + d.dy * dist;
-
-          if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) break;
-
-          const tile = state.grid[gy][gx];
-          if (tile === TileType.HARD_WALL || tile === TileType.SUDDEN_DEATH_BLOCK) {
-            break;
-          }
-
-          danger[gy][gx] = Math.max(danger[gy][gx], 80);
-
-          if (tile === TileType.SOFT_BLOCK || tile === TileType.VOLATILE_BLOCK) {
-            break;
-          }
-        }
-      }
+      this.markBombDanger(danger, state.grid, bomb.gx, bomb.gy, bomb.fireRange);
     }
 
     return danger;
   }
 
-  private findNearestSafeTile(state: GameState, startGx: number, startGy: number, danger: number[][]): Point | null {
-    const queue: Point[] = [{ gx: startGx, gy: startGy }];
+  private markBombDanger(danger: number[][], grid: number[][], bgx: number, bgy: number, range: number): void {
+    if (bgy >= 0 && bgy < GRID_ROWS && bgx >= 0 && bgx < GRID_COLS) {
+      danger[bgy][bgx] = Math.max(danger[bgy][bgx], 85);
+    }
+
+    const dirs = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 }
+    ];
+
+    for (const d of dirs) {
+      for (let dist = 1; dist <= range; dist++) {
+        const gx = bgx + d.dx * dist;
+        const gy = bgy + d.dy * dist;
+
+        if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) break;
+
+        const tile = grid[gy][gx];
+        if (tile === TileType.HARD_WALL || tile === TileType.SUDDEN_DEATH_BLOCK) {
+          break;
+        }
+
+        danger[gy][gx] = Math.max(danger[gy][gx], 85);
+
+        if (tile === TileType.SOFT_BLOCK || tile === TileType.VOLATILE_BLOCK) {
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Performs BFS and returns the FIRST ADJACENT STEP along the path to the nearest safe tile
+   */
+  private findImmediateStepToSafety(state: GameState, startGx: number, startGy: number, danger: number[][]): Point | null {
+    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null }];
     const visited = new Set<string>();
     visited.add(`${startGx},${startGy}`);
 
     while (queue.length > 0) {
       const cur = queue.shift()!;
 
-      // If this tile is completely safe, return it
+      // Found safe tile!
       if (danger[cur.gy][cur.gx] === 0) {
-        return cur;
+        // Reconstruct path to find the immediate next step from start
+        return this.getFirstStepFromPath(cur, startGx, startGy);
       }
 
       const neighbors = [
@@ -149,8 +166,9 @@ export class BotAI {
                             tile === TileType.CONVEYOR_RIGHT || tile === TileType.TELEPORT_A ||
                             tile === TileType.TELEPORT_B;
 
-          if (isWalkable && !hasBomb) {
-            queue.push(n);
+          // Prefer walking onto tiles that are either safe or at least not active explosions
+          if (isWalkable && !hasBomb && danger[n.gy][n.gx] < 100) {
+            queue.push({ gx: n.gx, gy: n.gy, parent: cur });
           }
         }
       }
@@ -159,10 +177,34 @@ export class BotAI {
     return null;
   }
 
-  private shouldPlaceBomb(state: GameState, gx: number, gy: number, danger: number[][]): boolean {
-    // Only place bomb if we have an adjacent soft block or nearby enemy
-    let hasTarget = false;
+  private getFirstStepFromPath(node: PathNode, startGx: number, startGy: number): Point {
+    const path: Point[] = [];
+    let curr: PathNode | null = node;
+    while (curr) {
+      path.unshift({ gx: curr.gx, gy: curr.gy });
+      curr = curr.parent;
+    }
 
+    // path[0] is start. path[1] is the immediate adjacent step!
+    if (path.length > 1) {
+      return path[1];
+    }
+    return { gx: startGx, gy: startGy };
+  }
+
+  /**
+   * Verifies if dropping a bomb here is safe.
+   * Simulates the bomb and ensures at least one escape path to safety exists.
+   */
+  private checkSafeBombPlacement(
+    state: GameState,
+    bot: PlayerState,
+    gx: number,
+    gy: number,
+    danger: number[][]
+  ): Point | null {
+    // Check if there is an adjacent breakable soft block or nearby enemy
+    let hasTarget = false;
     const neighbors = [
       { gx, gy: gy - 1 },
       { gx, gy: gy + 1 },
@@ -180,14 +222,12 @@ export class BotAI {
       }
     }
 
-    // Check if an enemy is close
     if (!hasTarget) {
       for (const p of state.players.values()) {
         if (p.id !== this.botId && p.alive) {
           const egx = Math.floor(p.x / TILE_SIZE);
           const egy = Math.floor(p.y / TILE_SIZE);
-          const dist = Math.abs(egx - gx) + Math.abs(egy - gy);
-          if (dist <= 2) {
+          if (Math.abs(egx - gx) + Math.abs(egy - gy) <= 2) {
             hasTarget = true;
             break;
           }
@@ -195,60 +235,104 @@ export class BotAI {
       }
     }
 
-    if (!hasTarget) return false;
+    if (!hasTarget) return null;
 
-    // CRITICAL: Ensure there is at least one walkable escape route if we drop a bomb here!
-    let escapeRoutes = 0;
-    for (const n of neighbors) {
-      if (n.gx >= 1 && n.gx < GRID_COLS - 1 && n.gy >= 1 && n.gy < GRID_ROWS - 1) {
-        const tile = state.grid[n.gy][n.gx];
-        const isWalkable = tile === TileType.EMPTY || tile === TileType.CONVEYOR_UP ||
-                          tile === TileType.CONVEYOR_DOWN || tile === TileType.CONVEYOR_LEFT ||
-                          tile === TileType.CONVEYOR_RIGHT;
-        if (isWalkable && danger[n.gy][n.gx] < 80) {
-          escapeRoutes++;
-        }
-      }
-    }
+    // Simulate danger grid if bomb was dropped right here
+    const simDanger = danger.map(row => [...row]);
+    this.markBombDanger(simDanger, state.grid, gx, gy, bot.powerUps.fireRange);
 
-    return escapeRoutes >= 1;
+    // Search for escape path from here to a tile with 0 simulated danger
+    const escapeStep = this.findImmediateStepToSafety(state, gx, gy, simDanger);
+    return escapeStep;
   }
 
-  private findNearestPowerUp(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
-    let bestDist = Infinity;
-    let bestPoint: Point | null = null;
-
+  private findStepTowardPowerUp(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
     for (const p of state.powerUps) {
       if (danger[p.gy]?.[p.gx] === 0) {
-        const d = Math.abs(p.gx - botGx) + Math.abs(p.gy - botGy);
-        if (d < bestDist) {
-          bestDist = d;
-          bestPoint = { gx: p.gx, gy: p.gy };
-        }
+        const step = this.bfsToDestination(state, botGx, botGy, p.gx, p.gy, danger);
+        if (step) return step;
       }
     }
-
-    return bestPoint;
+    return null;
   }
 
-  private findTargetTile(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
+  private findStepTowardTarget(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
     // Find closest alive opponent
-    let bestDist = Infinity;
-    let bestTarget: Point | null = null;
+    let closestEnemy: PlayerState | null = null;
+    let minDist = Infinity;
 
-    for (const player of state.players.values()) {
-      if (player.id !== this.botId && player.alive) {
-        const pgx = Math.floor(player.x / TILE_SIZE);
-        const pgy = Math.floor(player.y / TILE_SIZE);
-        const d = Math.abs(pgx - botGx) + Math.abs(pgy - botGy);
-        if (d < bestDist) {
-          bestDist = d;
-          bestTarget = { gx: pgx, gy: pgy };
+    for (const p of state.players.values()) {
+      if (p.id !== this.botId && p.alive) {
+        const egx = Math.floor(p.x / TILE_SIZE);
+        const egy = Math.floor(p.y / TILE_SIZE);
+        const dist = Math.abs(egx - botGx) + Math.abs(egy - botGy);
+        if (dist < minDist) {
+          minDist = dist;
+          closestEnemy = p;
         }
       }
     }
 
-    return bestTarget;
+    if (closestEnemy) {
+      const egx = Math.floor(closestEnemy.x / TILE_SIZE);
+      const egy = Math.floor(closestEnemy.y / TILE_SIZE);
+      return this.bfsToDestination(state, botGx, botGy, egx, egy, danger);
+    }
+
+    return null;
+  }
+
+  private bfsToDestination(
+    state: GameState,
+    startGx: number,
+    startGy: number,
+    destGx: number,
+    destGy: number,
+    danger: number[][]
+  ): Point | null {
+    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null }];
+    const visited = new Set<string>();
+    visited.add(`${startGx},${startGy}`);
+
+    let steps = 0;
+    while (queue.length > 0 && steps < 60) {
+      steps++;
+      const cur = queue.shift()!;
+
+      // Reached adjacent to or directly at destination
+      if (Math.abs(cur.gx - destGx) + Math.abs(cur.gy - destGy) <= 1) {
+        return this.getFirstStepFromPath(cur, startGx, startGy);
+      }
+
+      const neighbors = [
+        { gx: cur.gx, gy: cur.gy - 1 },
+        { gx: cur.gx, gy: cur.gy + 1 },
+        { gx: cur.gx - 1, gy: cur.gy },
+        { gx: cur.gx + 1, gy: cur.gy }
+      ];
+
+      for (const n of neighbors) {
+        const key = `${n.gx},${n.gy}`;
+        if (
+          n.gx >= 1 && n.gx < GRID_COLS - 1 &&
+          n.gy >= 1 && n.gy < GRID_ROWS - 1 &&
+          !visited.has(key)
+        ) {
+          visited.add(key);
+          const tile = state.grid[n.gy][n.gx];
+          const hasBomb = state.bombs.some(b => b.gx === n.gx && b.gy === n.gy);
+          const isWalkable = tile === TileType.EMPTY || tile === TileType.CONVEYOR_UP ||
+                            tile === TileType.CONVEYOR_DOWN || tile === TileType.CONVEYOR_LEFT ||
+                            tile === TileType.CONVEYOR_RIGHT;
+
+          if (isWalkable && !hasBomb && danger[n.gy][n.gx] === 0) {
+            queue.push({ gx: n.gx, gy: n.gy, parent: cur });
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   private moveTowardTile(bot: PlayerState, targetGx: number, targetGy: number, placeBomb: boolean): PlayerInput {
@@ -261,7 +345,7 @@ export class BotAI {
     let dx = 0;
     let dy = 0;
 
-    const threshold = 4;
+    const threshold = 5;
 
     if (Math.abs(diffX) > threshold) {
       dx = diffX > 0 ? 1 : -1;

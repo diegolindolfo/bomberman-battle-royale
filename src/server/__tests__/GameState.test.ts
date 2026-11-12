@@ -143,4 +143,28 @@ describe('Bomberman Battle Royale GameState Core Tests', () => {
     assert.strictEqual(p2.powerUps.hasShield, false);
     assert.strictEqual(p2.alive, true);
   });
+
+  test('Player can smoothly walk out of their placed bomb without getting stuck', () => {
+    const state = new GameState('classic');
+    const player = state.addPlayer('p1', 'Player 1', false);
+    state.startGame();
+
+    // Spawn is at (1, 1), center (72, 72)
+    player.x = 1 * TILE_SIZE + 24;
+    player.y = 1 * TILE_SIZE + 24;
+
+    const placed = state.placeBomb(player);
+    assert.strictEqual(placed, true);
+
+    // Player inputs move right (+X)
+    state.handleInput(player.id, { dx: 1, dy: 0, placeBomb: false });
+
+    // Update several ticks
+    for (let i = 0; i < 10; i++) {
+      state.update(0.033);
+    }
+
+    // Player should have advanced to the right towards (2, 1) and NOT be stuck at 72!
+    assert.ok(player.x > 72, `Player x should have moved forward, actual: ${player.x}`);
+  });
 });

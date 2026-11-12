@@ -61,6 +61,9 @@ export class GameState {
     this.generateSuddenDeathPath();
   }
 
+  /**
+   * Generates procedural arena layouts
+   */
   public initGrid(): void {
     this.grid = [];
     for (let y = 0; y < GRID_ROWS; y++) {
@@ -70,7 +73,7 @@ export class GameState {
         if (x === 0 || x === GRID_COLS - 1 || y === 0 || y === GRID_ROWS - 1) {
           row.push(TileType.HARD_WALL);
         }
-        // Classic pillar layout at alternating odd/even intervals
+        // Classic pillar layout at alternating even rows/cols
         else if (x % 2 === 0 && y % 2 === 0) {
           row.push(TileType.HARD_WALL);
         } else {
@@ -80,51 +83,94 @@ export class GameState {
       this.grid.push(row);
     }
 
-    // Reserved spawn zones for players (corners and midpoints)
+    // Reserved spawn zones for players (corners and midpoints - L shapes cleared)
     const reservedSpawns = [
       { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 },
       { x: GRID_COLS - 2, y: 1 }, { x: GRID_COLS - 3, y: 1 }, { x: GRID_COLS - 2, y: 2 },
       { x: 1, y: GRID_ROWS - 2 }, { x: 2, y: GRID_ROWS - 2 }, { x: 1, y: GRID_ROWS - 3 },
       { x: GRID_COLS - 2, y: GRID_ROWS - 2 }, { x: GRID_COLS - 3, y: GRID_ROWS - 2 }, { x: GRID_COLS - 2, y: GRID_ROWS - 3 },
-      { x: Math.floor(GRID_COLS / 2), y: 1 }, { x: Math.floor(GRID_COLS / 2), y: GRID_ROWS - 2 },
-      { x: 1, y: Math.floor(GRID_ROWS / 2) }, { x: GRID_COLS - 2, y: Math.floor(GRID_ROWS / 2) }
+      { x: Math.floor(GRID_COLS / 2), y: 1 }, { x: Math.floor(GRID_COLS / 2), y: 2 },
+      { x: Math.floor(GRID_COLS / 2), y: GRID_ROWS - 2 }, { x: Math.floor(GRID_COLS / 2), y: GRID_ROWS - 3 },
+      { x: 1, y: Math.floor(GRID_ROWS / 2) }, { x: 2, y: Math.floor(GRID_ROWS / 2) },
+      { x: GRID_COLS - 2, y: Math.floor(GRID_ROWS / 2) }, { x: GRID_COLS - 3, y: Math.floor(GRID_ROWS / 2) }
     ];
 
     const isReserved = (gx: number, gy: number) => {
       return reservedSpawns.some(s => s.x === gx && s.y === gy);
     };
 
-    // Fill soft blocks and arena-specific elements
+    // Procedural generation according to Arena Theme
+    if (this.arena === 'magma') {
+      this.generateMagmaProcedural(isReserved);
+    } else if (this.arena === 'cyber') {
+      this.generateCyberProcedural(isReserved);
+    } else {
+      this.generateClassicProcedural(isReserved);
+    }
+  }
+
+  private generateClassicProcedural(isReserved: (gx: number, gy: number) => boolean): void {
+    // Generate soft blocks with organic cluster density (~68%)
     for (let y = 1; y < GRID_ROWS - 1; y++) {
       for (let x = 1; x < GRID_COLS - 1; x++) {
-        if (this.grid[y][x] === TileType.HARD_WALL || isReserved(x, y)) {
-          continue;
+        if (this.grid[y][x] === TileType.HARD_WALL || isReserved(x, y)) continue;
+
+        // Symmetric procedural noise
+        const symX = Math.min(x, GRID_COLS - 1 - x);
+        const symY = Math.min(y, GRID_ROWS - 1 - y);
+        const seedVal = Math.sin(symX * 12.9898 + symY * 78.233) * 43758.5453;
+        const noise = seedVal - Math.floor(seedVal);
+
+        if (noise < 0.70 || Math.random() < 0.65) {
+          this.grid[y][x] = TileType.SOFT_BLOCK;
         }
+      }
+    }
+  }
+
+  private generateMagmaProcedural(isReserved: (gx: number, gy: number) => boolean): void {
+    // Place soft blocks and strategic clusters of Volatile TNT blocks
+    for (let y = 1; y < GRID_ROWS - 1; y++) {
+      for (let x = 1; x < GRID_COLS - 1; x++) {
+        if (this.grid[y][x] === TileType.HARD_WALL || isReserved(x, y)) continue;
 
         const rand = Math.random();
+        if (rand < 0.16) {
+          this.grid[y][x] = TileType.VOLATILE_BLOCK;
+        } else if (rand < 0.76) {
+          this.grid[y][x] = TileType.SOFT_BLOCK;
+        }
+      }
+    }
+  }
 
-        if (this.arena === 'magma') {
-          if (rand < 0.15) {
-            this.grid[y][x] = TileType.VOLATILE_BLOCK;
-          } else if (rand < 0.75) {
-            this.grid[y][x] = TileType.SOFT_BLOCK;
-          }
-        } else if (this.arena === 'cyber') {
-          // Special cyber conveyor lanes or teleporters
-          if (x === 7 && y === 3) {
-            this.grid[y][x] = TileType.TELEPORT_A;
-          } else if (x === 7 && y === 9) {
-            this.grid[y][x] = TileType.TELEPORT_B;
-          } else if ((y === 3 || y === 9) && x > 2 && x < 12 && x !== 7) {
-            this.grid[y][x] = y === 3 ? TileType.CONVEYOR_RIGHT : TileType.CONVEYOR_LEFT;
-          } else if (rand < 0.65) {
-            this.grid[y][x] = TileType.SOFT_BLOCK;
-          }
-        } else {
-          // Classic Green Meadow
-          if (rand < 0.72) {
-            this.grid[y][x] = TileType.SOFT_BLOCK;
-          }
+  private generateCyberProcedural(isReserved: (gx: number, gy: number) => boolean): void {
+    // Conveyor loops
+    const conveyorLanes = [
+      { y: 3, fromX: 3, toX: 6, tile: TileType.CONVEYOR_RIGHT },
+      { y: 3, fromX: 8, toX: 11, tile: TileType.CONVEYOR_RIGHT },
+      { y: 9, fromX: 3, toX: 6, tile: TileType.CONVEYOR_LEFT },
+      { y: 9, fromX: 8, toX: 11, tile: TileType.CONVEYOR_LEFT }
+    ];
+
+    for (const lane of conveyorLanes) {
+      for (let x = lane.fromX; x <= lane.toX; x++) {
+        if (!isReserved(x, lane.y) && this.grid[lane.y][x] !== TileType.HARD_WALL) {
+          this.grid[lane.y][x] = lane.tile;
+        }
+      }
+    }
+
+    // Teleport pair in balanced quadrants
+    this.grid[3][7] = TileType.TELEPORT_A;
+    this.grid[9][7] = TileType.TELEPORT_B;
+
+    // Soft blocks
+    for (let y = 1; y < GRID_ROWS - 1; y++) {
+      for (let x = 1; x < GRID_COLS - 1; x++) {
+        if (this.grid[y][x] !== TileType.EMPTY || isReserved(x, y)) continue;
+        if (Math.random() < 0.62) {
+          this.grid[y][x] = TileType.SOFT_BLOCK;
         }
       }
     }
@@ -265,7 +311,6 @@ export class GameState {
     let dx = input.dx;
     let dy = input.dy;
 
-    // Skull curse effect can invert controls
     if (player.powerUps.isCursed) {
       dx = -dx;
       dy = -dy;
@@ -299,14 +344,17 @@ export class GameState {
       return false;
     }
 
-    // Check if cell already contains a bomb
     if (this.bombs.some(b => b.gx === gx && b.gy === gy)) {
       return false;
     }
 
-    // Check if cell is solid obstacle
     const tile = this.grid[gy][gx];
-    if (tile === TileType.HARD_WALL || tile === TileType.SOFT_BLOCK || tile === TileType.VOLATILE_BLOCK || tile === TileType.SUDDEN_DEATH_BLOCK) {
+    if (
+      tile === TileType.HARD_WALL ||
+      tile === TileType.SOFT_BLOCK ||
+      tile === TileType.VOLATILE_BLOCK ||
+      tile === TileType.SUDDEN_DEATH_BLOCK
+    ) {
       return false;
     }
 
@@ -318,7 +366,8 @@ export class GameState {
       fuseTimer: BOMB_FUSE_TIME,
       fireRange: player.powerUps.fireRange,
       slidingVx: 0,
-      slidingVy: 0
+      slidingVy: 0,
+      overlapPlayers: [player.id] // Player who placed it can freely walk out
     };
 
     this.bombs.push(bomb);
@@ -329,7 +378,6 @@ export class GameState {
   public update(dt: number = TICK_DELTA): void {
     if (this.phase !== 'playing') return;
 
-    // 1. Update Game Timer & Sudden Death
     this.timer -= dt;
     if (this.timer <= SUDDEN_DEATH_START_TIME && !this.suddenDeathActive) {
       this.suddenDeathActive = true;
@@ -343,14 +391,12 @@ export class GameState {
       }
     }
 
-    // 2. Update Teleport Cooldowns
     for (const [id, cd] of this.teleportCooldowns.entries()) {
       if (cd > 0) {
         this.teleportCooldowns.set(id, cd - dt);
       }
     }
 
-    // 3. Update Explosions
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const exp = this.explosions[i];
       exp.duration -= dt;
@@ -359,16 +405,9 @@ export class GameState {
       }
     }
 
-    // 4. Update Bombs & Fuse / Sliding
     this.updateBombs(dt);
-
-    // 5. Update Players (Movement, Collision, Powerups)
     this.updatePlayers(dt);
-
-    // 6. Check Damage from Explosions
     this.checkExplosionDamage();
-
-    // 7. Check Win Condition
     this.checkWinCondition();
   }
 
@@ -378,17 +417,14 @@ export class GameState {
     const pt = this.suddenDeathPath[this.suddenDeathIndex++];
     this.grid[pt.y][pt.x] = TileType.SUDDEN_DEATH_BLOCK;
 
-    // Remove any powerup at this tile
     this.powerUps = this.powerUps.filter(p => !(p.gx === pt.x && p.gy === pt.y));
 
-    // Detonate any bomb at this tile
     const bombIndex = this.bombs.findIndex(b => b.gx === pt.x && b.gy === pt.y);
     if (bombIndex !== -1) {
       const b = this.bombs[bombIndex];
       this.detonateBomb(b);
     }
 
-    // Crush any player standing here
     const cellBounds = {
       minX: pt.x * TILE_SIZE,
       maxX: (pt.x + 1) * TILE_SIZE,
@@ -412,6 +448,21 @@ export class GameState {
   private updateBombs(dt: number): void {
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const bomb = this.bombs[i];
+
+      // Check overlap list: if player stepped away, remove from immune list
+      if (bomb.overlapPlayers && bomb.overlapPlayers.length > 0) {
+        const bombCenterX = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
+        const bombCenterY = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
+
+        bomb.overlapPlayers = bomb.overlapPlayers.filter(pid => {
+          const p = this.players.get(pid);
+          if (!p || !p.alive) return false;
+          // Keep in list only while still touching bomb tile
+          const distX = Math.abs(p.x - bombCenterX);
+          const distY = Math.abs(p.y - bombCenterY);
+          return distX < 28 && distY < 28;
+        });
+      }
 
       // Handle conveyor belts in Cyber arena
       if (this.arena === 'cyber' && bomb.slidingVx === 0 && bomb.slidingVy === 0) {
@@ -447,10 +498,15 @@ export class GameState {
   private isTileBlockedForBomb(gx: number, gy: number): boolean {
     if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return true;
     const tile = this.grid[gy][gx];
-    if (tile !== TileType.EMPTY && tile !== TileType.CONVEYOR_UP && tile !== TileType.CONVEYOR_DOWN && tile !== TileType.CONVEYOR_LEFT && tile !== TileType.CONVEYOR_RIGHT) {
+    if (
+      tile !== TileType.EMPTY &&
+      tile !== TileType.CONVEYOR_UP &&
+      tile !== TileType.CONVEYOR_DOWN &&
+      tile !== TileType.CONVEYOR_LEFT &&
+      tile !== TileType.CONVEYOR_RIGHT
+    ) {
       return true;
     }
-    // Blocked if another bomb is there
     if (this.bombs.some(b => b.gx === gx && b.gy === gy)) {
       return true;
     }
@@ -462,7 +518,6 @@ export class GameState {
     if (bombIndex === -1) return;
     this.bombs.splice(bombIndex, 1);
 
-    // Release owner bomb count
     const owner = this.players.get(bomb.ownerId);
     if (owner && owner.activeBombs > 0) {
       owner.activeBombs--;
@@ -490,12 +545,10 @@ export class GameState {
 
         const tile = this.grid[gy][gx];
 
-        // Indestructible walls stop explosion entirely
         if (tile === TileType.HARD_WALL || tile === TileType.SUDDEN_DEATH_BLOCK) {
           break;
         }
 
-        // Check if there is another bomb to chain detonate
         const hitBomb = this.bombs.find(b => b.gx === gx && b.gy === gy);
         if (hitBomb) {
           chainBombs.push(hitBomb);
@@ -508,17 +561,14 @@ export class GameState {
           direction: isEnd ? d.endDir : d.dir
         });
 
-        // Soft block destruction & powerup drop
         if (tile === TileType.SOFT_BLOCK) {
           this.grid[gy][gx] = TileType.EMPTY;
           this.rollPowerUpDrop(gx, gy);
-          break; // Flame stops on the destroyed block
+          break;
         }
 
-        // Volatile block (Magma arena): triggers instant 360 burst
         if (tile === TileType.VOLATILE_BLOCK) {
           this.grid[gy][gx] = TileType.EMPTY;
-          // Spawn miniature blast around volatile block
           this.triggerVolatileBurst(gx, gy);
           break;
         }
@@ -531,7 +581,6 @@ export class GameState {
       duration: EXPLOSION_DURATION
     });
 
-    // Detonate any chained bombs
     for (const chained of chainBombs) {
       this.detonateBomb(chained);
     }
@@ -566,8 +615,7 @@ export class GameState {
   }
 
   private rollPowerUpDrop(gx: number, gy: number): void {
-    // 40% chance to drop powerup from soft block
-    if (Math.random() > 0.40) return;
+    if (Math.random() > 0.42) return;
 
     const roll = Math.random();
     let type = PowerUpType.FIRE_UP;
@@ -588,7 +636,8 @@ export class GameState {
   }
 
   private updatePlayers(dt: number): void {
-    const playerRadius = 16; // collision circle for player
+    // 13px radius = 26px box inside 48px corridor. Gives 11px margin on both sides!
+    const playerRadius = 13;
 
     for (const player of this.players.values()) {
       if (!player.alive) continue;
@@ -604,19 +653,18 @@ export class GameState {
         }
       }
 
-      // Check Conveyor Belt effect under player in Cyber Arena
+      // Conveyor Belt in Cyber Arena
       if (this.arena === 'cyber') {
         const curGx = Math.floor(player.x / TILE_SIZE);
         const curGy = Math.floor(player.y / TILE_SIZE);
         if (curGx >= 0 && curGx < GRID_COLS && curGy >= 0 && curGy < GRID_ROWS) {
           const tile = this.grid[curGy][curGx];
-          const conveyorSpeed = 90 * dt;
+          const conveyorSpeed = 95 * dt;
           if (tile === TileType.CONVEYOR_UP) player.y -= conveyorSpeed;
           else if (tile === TileType.CONVEYOR_DOWN) player.y += conveyorSpeed;
           else if (tile === TileType.CONVEYOR_LEFT) player.x -= conveyorSpeed;
           else if (tile === TileType.CONVEYOR_RIGHT) player.x += conveyorSpeed;
 
-          // Teleport Pad Check
           const cd = this.teleportCooldowns.get(player.id) || 0;
           if (cd <= 0) {
             if (tile === TileType.TELEPORT_A) {
@@ -632,41 +680,45 @@ export class GameState {
         }
       }
 
-      // Movement with sub-tile collision and corner sliding
-      let nextX = player.x + player.vx * dt;
-      let nextY = player.y + player.vy * dt;
-
-      // X-axis movement & collision
+      // X Movement & Precision Corner Assist
       if (player.vx !== 0) {
+        const nextX = player.x + player.vx * dt;
         const canMoveX = this.canPlayerMoveTo(nextX, player.y, playerRadius, player);
         if (canMoveX) {
           player.x = nextX;
         } else {
-          // Corner sliding assist for smooth arcade feel:
+          // Pull smoothly toward center of current horizontal corridor
           const tileCenterY = Math.floor(player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
-          const diffY = player.y - tileCenterY;
-          if (Math.abs(diffY) > 6 && Math.abs(diffY) < 22) {
-            player.y += (diffY > 0 ? 1 : -1) * (player.powerUps.speed * dt * 0.7);
+          const diffY = tileCenterY - player.y;
+          if (Math.abs(diffY) > 1 && Math.abs(diffY) < 18) {
+            const stepY = Math.sign(diffY) * Math.min(Math.abs(diffY), player.powerUps.speed * dt * 0.9);
+            if (this.canPlayerMoveTo(player.x, player.y + stepY, playerRadius, player)) {
+              player.y += stepY;
+            }
           }
         }
       }
 
-      // Y-axis movement & collision
+      // Y Movement & Precision Corner Assist
       if (player.vy !== 0) {
+        const nextY = player.y + player.vy * dt;
         const canMoveY = this.canPlayerMoveTo(player.x, nextY, playerRadius, player);
         if (canMoveY) {
           player.y = nextY;
         } else {
-          // Corner sliding assist on horizontal alignment
+          // Pull smoothly toward center of current vertical corridor
           const tileCenterX = Math.floor(player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
-          const diffX = player.x - tileCenterX;
-          if (Math.abs(diffX) > 6 && Math.abs(diffX) < 22) {
-            player.x += (diffX > 0 ? 1 : -1) * (player.powerUps.speed * dt * 0.7);
+          const diffX = tileCenterX - player.x;
+          if (Math.abs(diffX) > 1 && Math.abs(diffX) < 18) {
+            const stepX = Math.sign(diffX) * Math.min(Math.abs(diffX), player.powerUps.speed * dt * 0.9);
+            if (this.canPlayerMoveTo(player.x + stepX, player.y, playerRadius, player)) {
+              player.x += stepX;
+            }
           }
         }
       }
 
-      // Check Powerup pickups
+      // Power-up pickups
       const pGx = Math.floor(player.x / TILE_SIZE);
       const pGy = Math.floor(player.y / TILE_SIZE);
       for (let i = this.powerUps.length - 1; i >= 0; i--) {
@@ -677,7 +729,7 @@ export class GameState {
         }
       }
 
-      // Check Bomb Kick interaction
+      // Bomb Kick
       if (player.powerUps.canKick) {
         for (const bomb of this.bombs) {
           if (bomb.slidingVx === 0 && bomb.slidingVy === 0) {
@@ -716,15 +768,14 @@ export class GameState {
           return false;
         }
 
-        // Bomb collision: if a bomb exists on this tile, allow player to walk OUT of a bomb they just placed,
-        // but not back into it.
+        // Bomb collision: allow player to pass if they are in overlap list
         const bomb = this.bombs.find(b => b.gx === gx && b.gy === gy);
         if (bomb) {
-          const prevGx = Math.floor(player.x / TILE_SIZE);
-          const prevGy = Math.floor(player.y / TILE_SIZE);
-          if (prevGx !== gx || prevGy !== gy) {
-            return false;
+          if (bomb.overlapPlayers && bomb.overlapPlayers.includes(player.id)) {
+            // Player is safely walking out of their bomb
+            continue;
           }
+          return false;
         }
       }
     }
@@ -766,16 +817,15 @@ export class GameState {
         for (const player of this.players.values()) {
           if (!player.alive || player.invincibleTimer > 0) continue;
 
-          // Check if player bounding box intersects cell
           if (
-            player.x >= cellLeft - 10 &&
-            player.x <= cellRight + 10 &&
-            player.y >= cellTop - 10 &&
-            player.y <= cellBottom + 10
+            player.x >= cellLeft - 8 &&
+            player.x <= cellRight + 8 &&
+            player.y >= cellTop - 8 &&
+            player.y <= cellBottom + 8
           ) {
             if (player.powerUps.hasShield) {
               player.powerUps.hasShield = false;
-              player.invincibleTimer = 1.5; // brief recovery
+              player.invincibleTimer = 1.5;
             } else {
               player.alive = false;
             }

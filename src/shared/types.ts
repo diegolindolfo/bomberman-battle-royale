@@ -68,6 +68,7 @@ export interface Bomb {
   fireRange: number;
   slidingVx: number;  // sliding speed when kicked
   slidingVy: number;
+  overlapPlayers?: string[]; // players currently inside who can step out
 }
 
 export interface ExplosionCell {

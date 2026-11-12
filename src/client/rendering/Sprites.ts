@@ -6,6 +6,7 @@ export class Sprites {
   private static bombsImg: HTMLImageElement | null = null;
   private static arenasImg: HTMLImageElement | null = null;
   private static powerupsImg: HTMLImageElement | null = null;
+  private static tileImages: Record<string, HTMLImageElement> = {};
 
   public static init(): void {
     if (typeof window === 'undefined') return;
@@ -21,9 +22,21 @@ export class Sprites {
 
     this.powerupsImg = new Image();
     this.powerupsImg.src = '/assets/powerups.jpg';
+
+    // Load individual pixel art tile assets for arenas
+    const tileNames = [
+      'classic_floor', 'classic_wall', 'classic_block',
+      'magma_floor', 'magma_wall', 'magma_tnt',
+      'cyber_floor', 'cyber_wall', 'cyber_conveyor', 'cyber_portal'
+    ];
+    for (const name of tileNames) {
+      const img = new Image();
+      img.src = `/assets/tiles/${name}.png`;
+      this.tileImages[name] = img;
+    }
   }
 
-  // Draw Arena Floor & Static Tiles
+  // Draw Arena Floor & Static Tiles using high-res pixel art assets
   public static drawTile(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -35,32 +48,23 @@ export class Sprites {
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
 
-    // 1. Draw Base Floor
-    if (arena === 'classic') {
-      const isEven = (gx + gy) % 2 === 0;
-      ctx.fillStyle = isEven ? '#3da443' : '#339239';
+    // 1. Draw Floor Tile from Pixel Art Asset
+    const floorImg = this.tileImages[`${arena}_floor`];
+    if (floorImg && floorImg.complete && floorImg.naturalWidth > 0) {
+      ctx.drawImage(floorImg, x, y, TILE_SIZE, TILE_SIZE);
+    } else {
+      // Solid fallback
+      if (arena === 'classic') {
+        ctx.fillStyle = (gx + gy) % 2 === 0 ? '#3da443' : '#339239';
+      } else if (arena === 'magma') {
+        ctx.fillStyle = (gx + gy) % 2 === 0 ? '#24100e' : '#1a0b0a';
+      } else {
+        ctx.fillStyle = '#090d16';
+      }
       ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-      ctx.fillStyle = '#2d7c32';
-      ctx.fillRect(x + 10, y + 8, 4, 4);
-      ctx.fillRect(x + 32, y + 26, 4, 4);
-    } else if (arena === 'magma') {
-      const isEven = (gx + gy) % 2 === 0;
-      ctx.fillStyle = isEven ? '#24100e' : '#1a0b0a';
-      ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-      ctx.fillStyle = '#ea580c';
-      ctx.fillRect(x + 14, y + 10, 5, 2);
-      ctx.fillRect(x + 28, y + 32, 3, 4);
-    } else if (arena === 'cyber') {
-      ctx.fillStyle = '#090d16';
-      ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(x + 23, y + 23, 2, 2);
     }
 
-    // 2. Draw Obstacle / Mechanism
+    // 2. Draw Obstacle / Mechanism from Pixel Art Asset
     switch (tile) {
       case TileType.HARD_WALL:
         this.drawHardWall(ctx, x, y, arena);
@@ -90,96 +94,45 @@ export class Sprites {
   }
 
   private static drawHardWall(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
-    if (arena === 'classic') {
-      // Ornate stone pillar
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(x + 6, y + 6, TILE_SIZE - 12, 6);
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(x + 6, y + TILE_SIZE - 10, TILE_SIZE - 12, 4);
-    } else if (arena === 'magma') {
-      // Magma Basalt Pillar
-      ctx.fillStyle = '#1c1917';
-      ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      ctx.fillStyle = '#292524';
-      ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(x + 8, y + 8, 5, 32);
-      ctx.fillRect(x + 22, y + 14, 5, 20);
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(x + 10, y + 12, 2, 20);
-    } else {
-      // Cyber Neon Column
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      ctx.fillStyle = '#0369a1';
-      ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(x + 8, y + 8, TILE_SIZE - 16, TILE_SIZE - 16);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(x + 14, y + 14, TILE_SIZE - 28, TILE_SIZE - 28);
+    const wallImg = this.tileImages[`${arena}_wall`];
+    if (wallImg && wallImg.complete && wallImg.naturalWidth > 0) {
+      ctx.drawImage(wallImg, x, y, TILE_SIZE, TILE_SIZE);
+      return;
     }
+
+    // Vector fallback
+    ctx.fillStyle = arena === 'magma' ? '#1c1917' : arena === 'cyber' ? '#0284c7' : '#64748b';
+    ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
   }
 
   private static drawSoftBlock(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
-    if (arena === 'classic') {
-      // Wooden Crate
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10);
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(x + 8, y + 8, TILE_SIZE - 16, TILE_SIZE - 16);
-      // Diagonal steel brace
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x + 6, y + 6);
-      ctx.lineTo(x + TILE_SIZE - 6, y + TILE_SIZE - 6);
-      ctx.stroke();
-    } else if (arena === 'magma') {
-      // Molten Crag Crate
-      ctx.fillStyle = '#450a0a';
-      ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-      ctx.fillStyle = '#7f1d1d';
-      ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10);
-      ctx.fillStyle = '#f97316';
-      ctx.fillRect(x + 12, y + 16, 24, 16);
-    } else {
-      // Cyber Data Node
-      ctx.fillStyle = '#312e81';
-      ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-      ctx.fillStyle = '#4f46e5';
-      ctx.fillRect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10);
-      ctx.fillStyle = '#818cf8';
-      ctx.fillRect(x + 12, y + 12, 24, 24);
+    const key = arena === 'magma' ? 'magma_wall' : `${arena}_block`;
+    const blockImg = this.tileImages[key];
+    if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
+      ctx.drawImage(blockImg, x, y, TILE_SIZE, TILE_SIZE);
+      return;
     }
+
+    // Vector fallback
+    ctx.fillStyle = arena === 'magma' ? '#7f1d1d' : arena === 'cyber' ? '#4f46e5' : '#b45309';
+    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
 
   private static drawVolatileBlock(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
-    const pulse = 0.8 + 0.2 * Math.sin(animTime * 8);
-    ctx.fillStyle = '#991b1b';
-    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    const tntImg = this.tileImages['magma_tnt'];
+    if (tntImg && tntImg.complete && tntImg.naturalWidth > 0) {
+      const pulse = 1 + 0.05 * Math.sin(animTime * 8);
+      ctx.save();
+      ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+      ctx.scale(pulse, pulse);
+      ctx.drawImage(tntImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.restore();
+      return;
+    }
+
+    // Vector fallback
     ctx.fillStyle = '#dc2626';
-    ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(x + 6, y + 14, TILE_SIZE - 12, 20);
-
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('TNT', x + TILE_SIZE / 2, y + TILE_SIZE / 2 + 1);
-
-    // Glowing spark fuse on top
-    ctx.fillStyle = `rgba(255, 87, 34, ${pulse})`;
-    ctx.beginPath();
-    ctx.arc(x + TILE_SIZE / 2, y + 6, 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
 
   private static drawConveyor(
@@ -189,18 +142,9 @@ export class Sprites {
     tile: TileType,
     animTime: number
   ): void {
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-    ctx.strokeStyle = '#06b6d4';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-
-    const offset = (animTime * 36) % 18;
+    const conveyorImg = this.tileImages['cyber_conveyor'];
     const cx = x + TILE_SIZE / 2;
     const cy = y + TILE_SIZE / 2;
-
-    ctx.save();
-    ctx.translate(cx, cy);
 
     let angle = 0;
     if (tile === TileType.CONVEYOR_UP) angle = -Math.PI / 2;
@@ -208,17 +152,21 @@ export class Sprites {
     else if (tile === TileType.CONVEYOR_LEFT) angle = Math.PI;
     else if (tile === TileType.CONVEYOR_RIGHT) angle = 0;
 
-    ctx.rotate(angle);
+    if (conveyorImg && conveyorImg.complete && conveyorImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.drawImage(conveyorImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.restore();
+      return;
+    }
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.beginPath();
-    ctx.moveTo(offset - 9, -7);
-    ctx.lineTo(offset + 6, 0);
-    ctx.lineTo(offset - 9, 7);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
+    // Vector fallback
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
 
   private static drawTeleport(
@@ -228,36 +176,29 @@ export class Sprites {
     tile: TileType,
     animTime: number
   ): void {
-    const isA = tile === TileType.TELEPORT_A;
-    const color = isA ? '#ec4899' : '#8b5cf6';
+    const portalImg = this.tileImages['cyber_portal'];
     const cx = x + TILE_SIZE / 2;
     const cy = y + TILE_SIZE / 2;
-    const radius = 16 + 3 * Math.sin(animTime * 6);
 
-    ctx.save();
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    if (portalImg && portalImg.complete && portalImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(animTime * 1.5);
+      const pulse = 1 + 0.08 * Math.sin(animTime * 6);
+      ctx.scale(pulse, pulse);
+      ctx.drawImage(portalImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.restore();
+      return;
+    }
 
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalAlpha = 0.95;
+    // Vector fallback
+    const isA = tile === TileType.TELEPORT_A;
+    const color = isA ? '#ec4899' : '#8b5cf6';
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 16, 0, Math.PI * 2);
     ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(isA ? 'Ω' : 'Ψ', cx, cy);
-
-    ctx.restore();
   }
 
   private static drawSuddenDeathBlock(ctx: CanvasRenderingContext2D, x: number, y: number): void {
@@ -271,10 +212,10 @@ export class Sprites {
     ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 20);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px sans-serif';
+    ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('✕', x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+    ctx.fillText('X', x + TILE_SIZE / 2, y + TILE_SIZE / 2);
   }
 
   // Draw Bomb with fuse spark and pulse
@@ -381,7 +322,6 @@ export class Sprites {
     const cx = gx * TILE_SIZE + TILE_SIZE / 2;
     const bobY = gy * TILE_SIZE + TILE_SIZE / 2 + Math.sin(animTime * 5) * 3;
 
-    // If powerups sheet is loaded, draw from sprite sheet!
     if (this.powerupsImg && this.powerupsImg.complete && this.powerupsImg.naturalWidth > 0) {
       const img = this.powerupsImg;
       const w = img.naturalWidth / 3;
@@ -467,7 +407,7 @@ export class Sprites {
     }
 
     if (isInvincible && Math.floor(animTime * 15) % 2 === 0) {
-      return; // invincibility flash
+      return;
     }
 
     ctx.save();
@@ -483,37 +423,33 @@ export class Sprites {
 
     // Shield Bubble
     if (hasShield) {
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.strokeStyle = '#10B981';
+      ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
       ctx.beginPath();
       ctx.arc(x, py, 23, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
 
-    // If characters sprite sheet is loaded, draw the cropped character sprite!
+    // Crop from characters sprite sheet if loaded
     if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
       const img = this.charactersImg;
       const colWidth = img.naturalWidth / 6;
       const rowHeight = img.naturalHeight / 4;
 
-      // Map color to column
-      // 0: Red, 1: Blue, 2: Green, 3: Yellow, 4: Purple, 5: Cyan
       let col = 0;
       if (color.includes('ef4444') || color.includes('red')) col = 0;
       else if (color.includes('3b82f6') || color.includes('blue')) col = 1;
       else if (color.includes('10b981') || color.includes('green')) col = 2;
       else if (color.includes('f59e0b') || color.includes('yellow')) col = 3;
       else if (color.includes('8b5cf6') || color.includes('purple')) col = 4;
-      else col = 5; // Cyan / default
+      else col = 5;
 
-      // Map facing direction to row
-      // Row 0: Front, Row 1: Side walk, Row 2: Back
       let row = 0;
       if (facing === 'down') row = 0;
       else if (facing === 'up') row = 2;
-      else row = 1; // left or right
+      else row = 1;
 
       const flip = facing === 'left';
 
@@ -534,7 +470,7 @@ export class Sprites {
       );
       ctx.restore();
     } else {
-      // Procedural vector character fallback
+      // Vector fallback
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x, py + 4, 13, 0, Math.PI * 2);
@@ -569,13 +505,16 @@ export class Sprites {
       ctx.fill();
     }
 
-    // Player Name Tag & Health above head
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.roundRect(x - 32, py - 35, 64, 14, 4);
+    // Name tag in JetBrains Mono
+    ctx.fillStyle = '#121214';
+    ctx.roundRect(x - 32, py - 35, 64, 14, 3);
     ctx.fill();
+    ctx.strokeStyle = '#242428';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 9px sans-serif';
+    ctx.fillStyle = '#F4F4F5';
+    ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(name.substring(0, 10), x, py - 28);
