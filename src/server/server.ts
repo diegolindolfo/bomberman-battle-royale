@@ -26,8 +26,8 @@ io.on('connection', (socket) => {
   // Send current room list on connect
   socket.emit('rooms_list', roomManager.getPublicRooms());
 
-  socket.on('create_room', (data: { name: string; arena: ArenaTheme; maxPlayers: number; fillWithBots: boolean }) => {
-    roomManager.createRoom(socket, data.name, data.arena, data.maxPlayers, data.fillWithBots);
+  socket.on('create_room', (data: { name: string; arena: ArenaTheme; maxPlayers: number; fillWithBots: boolean; autoStart?: boolean }) => {
+    roomManager.createRoom(socket, data.name, data.arena, data.maxPlayers, data.fillWithBots, Boolean(data.autoStart));
   });
 
   socket.on('join_room', (data: { roomId: string; name: string }) => {

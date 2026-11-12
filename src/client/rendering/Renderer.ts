@@ -79,9 +79,12 @@ export class Renderer {
       Sprites.drawPowerUp(ctx, pup.gx, pup.gy, pup.type, this.animTime);
     }
 
-    // 3. Draw Bombs
+    // 3. Draw Bombs at smooth world coordinates
     for (const bomb of snapshot.bombs) {
-      Sprites.drawBomb(ctx, bomb.gx, bomb.gy, bomb.fuseTimer, this.animTime);
+      const bx = typeof bomb.x === 'number' ? bomb.x : bomb.gx * TILE_SIZE + TILE_SIZE / 2;
+      const by = typeof bomb.y === 'number' ? bomb.y : bomb.gy * TILE_SIZE + TILE_SIZE / 2;
+      const isSliding = bomb.slidingVx !== 0 || bomb.slidingVy !== 0;
+      Sprites.drawBomb(ctx, bx, by, bomb.fuseTimer, this.animTime, isSliding);
     }
 
     // 4. Draw Explosions
@@ -93,6 +96,7 @@ export class Renderer {
 
     // 5. Draw Players
     for (const player of snapshot.players) {
+      const isWinner = snapshot.phase === 'game_over' && snapshot.winner?.id === player.id;
       Sprites.drawPlayer(
         ctx,
         player.x,
@@ -104,7 +108,9 @@ export class Renderer {
         player.alive,
         player.powerUps.hasShield,
         player.invincibleTimer > 0,
-        this.animTime
+        this.animTime,
+        player.powerUps.isCursed,
+        isWinner
       );
 
       // Marker arrow for "YOU"

@@ -1,10 +1,11 @@
 import { io, Socket } from 'socket.io-client';
-import { ArenaTheme, GameSnapshot, PlayerInput, RoomSummary } from '../shared/types.js';
+import { ArenaTheme, GameSnapshot, PlayerPowerUps, RoomSummary } from '../shared/types.js';
 import { Renderer } from './rendering/Renderer.js';
 import { SoundFx } from './audio/SoundFx.js';
 import { InputHandler } from './input/InputHandler.js';
 import { GameState } from '../server/GameState.js';
 import { BotAI } from '../server/BotAI.js';
+import { TILE_SIZE } from '../shared/constants.js';
 
 class BombermanApp {
   private socket: Socket;
@@ -23,28 +24,106 @@ class BombermanApp {
   private selectedArena: ArenaTheme = 'ruins';
 
   private lastSnapshot: GameSnapshot | null = null;
-  private prevBombCount: number = 0;
-  private prevExplosionCount: number = 0;
+
+  // Per-match event trackers (reset every round so audio/particles never drift)
+  private seenBombIds: Set<string> = new Set();
+  private seenExplosionIds: Set<string> = new Set();
+  private seenBreakingCoords: Set<string> = new Set();
   private prevSuddenDeath: boolean = false;
   private prevMyAlive: boolean = true;
+  private prevPowerUps: PlayerPowerUps | null = null;
 
   constructor() {
     this.socket = io({
       timeout: 3000,
-      reconnectionAttempts: 3
+      reconnectionAttempts: 2
     });
 
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.renderer = new Renderer(canvas);
     this.soundFx = new SoundFx();
-    this.inputHandler = new InputHandler();
+    this.inputHandler = new InputHandler(() => this.handleRestartShortcut());
 
     this.bindDOM();
     this.bindSocket();
+    this.updateConnectionIndicator(false);
     this.startRenderLoop();
   }
 
+  private resetMatchTrackers(): void {
+    this.seenBombIds.clear();
+    this.seenExplosionIds.clear();
+    this.seenBreakingCoords.clear();
+    this.prevSuddenDeath = false;
+    this.prevMyAlive = true;
+    this.prevPowerUps = null;
+    document.getElementById('spectator-bar')?.classList.remove('active');
+    document.getElementById('modal-gameover')?.classList.remove('active');
+  }
+
+  private updateConnectionIndicator(connected: boolean): void {
+    const dot = document.getElementById('connection-status-dot');
+    const txt = document.getElementById('connection-status-text');
+    if (dot) dot.style.backgroundColor = connected ? 'var(--accent)' : '#8E8E93';
+    if (txt) txt.textContent = connected ? 'Servidor Online' : 'Modo Local';
+  }
+
+  private showNotice(message: string): void {
+    const notice = document.getElementById('lobby-notice');
+    const textEl = document.getElementById('lobby-notice-text');
+    if (notice && textEl) {
+      textEl.textContent = message;
+      notice.classList.add('active');
+    }
+  }
+
+  private hideNotice(): void {
+    document.getElementById('lobby-notice')?.classList.remove('active');
+  }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  private getArenaShortLabel(arena: ArenaTheme): string {
+    if (arena === 'cryo' || arena === 'cyber') return 'CRIO';
+    if (arena === 'foundry' || arena === 'magma') return 'FUNDIÇÃO';
+    return 'RUÍNAS';
+  }
+
+  private handleRestartShortcut(): void {
+    const gameScreenActive = document.getElementById('screen-game')?.classList.contains('active');
+    if (!gameScreenActive || !this.lastSnapshot) return;
+
+    const me = this.lastSnapshot.players.find(p => p.id === this.myPlayerId);
+    const canQuickRestart = this.isLocalMode || this.isHost;
+    const isGameOverOrSpectating =
+      this.lastSnapshot.phase === 'game_over' || (me && !me.alive);
+
+    if (canQuickRestart && isGameOverOrSpectating) {
+      this.restartCurrentMatch();
+    }
+  }
+
+  private restartCurrentMatch(): void {
+    this.resetMatchTrackers();
+    if (this.isLocalMode) {
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
+      this.startLocalGame(name, this.selectedArena);
+    } else {
+      this.socket.emit('restart_game', { arena: this.selectedArena });
+    }
+  }
+
   private bindDOM(): void {
+    document.getElementById('btn-dismiss-notice')?.addEventListener('click', () => {
+      this.hideNotice();
+    });
+
     // Sound toggle
     const soundBtn = document.getElementById('btn-sound-toggle') as HTMLButtonElement;
     soundBtn.addEventListener('click', () => {
@@ -68,24 +147,23 @@ class BombermanApp {
       });
     });
 
-    // Quick Play with Bots
+    // Quick Play with Bots (atomic autoStart on server or instant local browser simulation)
     const quickPlayBtn = document.getElementById('btn-quick-play') as HTMLButtonElement;
     quickPlayBtn.addEventListener('click', () => {
-      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+      this.hideNotice();
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
 
       if (this.isConnectedToServer) {
         this.isLocalMode = false;
+        this.resetMatchTrackers();
         this.socket.emit('create_room', {
           name,
           arena: this.selectedArena,
           maxPlayers: 4,
-          fillWithBots: true
+          fillWithBots: true,
+          autoStart: true
         });
-        setTimeout(() => {
-          this.socket.emit('start_game');
-        }, 150);
       } else {
-        // Run locally in browser (works 100% on Vercel without a WebSocket server)
         this.startLocalGame(name, this.selectedArena);
       }
     });
@@ -93,32 +171,39 @@ class BombermanApp {
     // Create Multiplayer Room
     const createRoomBtn = document.getElementById('btn-create-room') as HTMLButtonElement;
     createRoomBtn.addEventListener('click', () => {
+      this.hideNotice();
       if (!this.isConnectedToServer) {
-        alert('Servidor multiplayer em tempo real não detectado nesta hospedagem. Iniciando modo com bots locais...');
-        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
-        this.startLocalGame(name, this.selectedArena);
+        this.showNotice('Servidor WebSocket indisponível nesta hospedagem estática. Iniciando partida local com bots.');
+        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
+        setTimeout(() => this.startLocalGame(name, this.selectedArena), 600);
         return;
       }
 
-      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
       this.isLocalMode = false;
       this.socket.emit('create_room', {
         name,
         arena: this.selectedArena,
         maxPlayers: 4,
-        fillWithBots: true
+        fillWithBots: true,
+        autoStart: false
       });
     });
 
     // Join Room by Code
     const joinRoomBtn = document.getElementById('btn-join-room') as HTMLButtonElement;
     joinRoomBtn.addEventListener('click', () => {
+      this.hideNotice();
       if (!this.isConnectedToServer) {
-        return alert('Multiplayer online requer conexão com servidor ativo.');
+        this.showNotice('Salas multiplayer online requerem servidor Node.js conectado. Utilize "Iniciar Partida Rápida" para jogar com bots.');
+        return;
       }
       const code = (document.getElementById('input-room-code') as HTMLInputElement).value.trim().toUpperCase();
-      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
-      if (!code) return alert('Por favor, informe o código da sala.');
+      const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
+      if (!code) {
+        this.showNotice('Informe o código identificador da sala para conectar.');
+        return;
+      }
       this.isLocalMode = false;
       this.socket.emit('join_room', { roomId: code, name });
     });
@@ -126,6 +211,7 @@ class BombermanApp {
     // Start Game from Room
     const startBtn = document.getElementById('btn-start-game') as HTMLButtonElement;
     startBtn.addEventListener('click', () => {
+      this.resetMatchTrackers();
       this.socket.emit('start_game');
     });
 
@@ -134,8 +220,8 @@ class BombermanApp {
     copyBtn.addEventListener('click', () => {
       if (this.currentRoomId) {
         navigator.clipboard.writeText(this.currentRoomId);
-        copyBtn.textContent = 'Código copiado';
-        setTimeout(() => { copyBtn.textContent = 'Copiar identificador'; }, 2000);
+        copyBtn.textContent = 'Identificador copiado';
+        setTimeout(() => { copyBtn.textContent = 'Copiar Identificador'; }, 2000);
       }
     });
 
@@ -145,16 +231,18 @@ class BombermanApp {
       window.location.reload();
     });
 
+    // Spectator Actions
+    document.getElementById('btn-spectator-restart')?.addEventListener('click', () => {
+      this.restartCurrentMatch();
+    });
+    document.getElementById('btn-spectator-lobby')?.addEventListener('click', () => {
+      window.location.reload();
+    });
+
     // Modal buttons
     const playAgainBtn = document.getElementById('btn-play-again') as HTMLButtonElement;
     playAgainBtn.addEventListener('click', () => {
-      document.getElementById('modal-gameover')?.classList.remove('active');
-      if (this.isLocalMode) {
-        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
-        this.startLocalGame(name, this.selectedArena);
-      } else {
-        this.socket.emit('restart_game', { arena: this.selectedArena });
-      }
+      this.restartCurrentMatch();
     });
 
     const backLobbyBtn = document.getElementById('btn-back-lobby') as HTMLButtonElement;
@@ -165,36 +253,42 @@ class BombermanApp {
 
   private startLocalGame(playerName: string, arena: ArenaTheme): void {
     this.isLocalMode = true;
+    this.isHost = true;
+    this.resetMatchTrackers();
+
     this.localState = new GameState(arena);
     this.localBots.clear();
 
     const me = this.localState.addPlayer('player_local', playerName, false);
     this.myPlayerId = me.id;
 
-    // Add 3 Intelligent AI Bots
+    // Add 3 Tactical & Aggressive AI Bots
     const botNames = ['MechaBomber', 'CyberBot', 'DynamiteAI'];
     for (let i = 0; i < 3; i++) {
       const botId = `bot_local_${i + 1}`;
-      this.localState.addPlayer(botId, botNames[i], true);
-      this.localBots.set(botId, new BotAI(botId));
+      const botPlayer = this.localState.addPlayer(botId, botNames[i], true);
+      this.localBots.set(botId, new BotAI(botId, botPlayer.botPersonality));
     }
 
     this.localState.startGame();
     this.showScreen('screen-game');
-    document.getElementById('modal-gameover')?.classList.remove('active');
+    (document.activeElement as HTMLElement | null)?.blur();
   }
 
   private bindSocket(): void {
     this.socket.on('connect', () => {
       this.isConnectedToServer = true;
+      this.updateConnectionIndicator(true);
     });
 
     this.socket.on('disconnect', () => {
       this.isConnectedToServer = false;
+      this.updateConnectionIndicator(false);
     });
 
     this.socket.on('connect_error', () => {
       this.isConnectedToServer = false;
+      this.updateConnectionIndicator(false);
     });
 
     this.socket.on('rooms_list', (rooms: RoomSummary[]) => {
@@ -221,12 +315,13 @@ class BombermanApp {
     });
 
     this.socket.on('game_started', () => {
+      this.resetMatchTrackers();
       this.showScreen('screen-game');
-      document.getElementById('modal-gameover')?.classList.remove('active');
+      (document.activeElement as HTMLElement | null)?.blur();
     });
 
     this.socket.on('error_message', (msg: string) => {
-      alert(msg);
+      this.showNotice(msg);
     });
 
     this.socket.on('game_state', (snapshot: GameSnapshot) => {
@@ -237,50 +332,100 @@ class BombermanApp {
   }
 
   private processSnapshot(snapshot: GameSnapshot): void {
-    this.handleSnapshotAudio(snapshot);
+    this.handleSnapshotFeedback(snapshot);
     this.lastSnapshot = snapshot;
     this.updateHUD(snapshot);
 
     if (snapshot.phase === 'game_over') {
+      document.getElementById('spectator-bar')?.classList.remove('active');
       this.showGameOverModal(snapshot);
     }
   }
 
-  private handleSnapshotAudio(snapshot: GameSnapshot): void {
-    // Bomb dropped
-    if (snapshot.bombs.length > this.prevBombCount) {
-      this.soundFx.playBombDrop();
-    }
-    this.prevBombCount = snapshot.bombs.length;
-
-    // Explosions detonated
-    if (snapshot.explosions.length > this.prevExplosionCount) {
-      this.soundFx.playExplosion();
-      const newestExp = snapshot.explosions[snapshot.explosions.length - 1];
-      const center = newestExp?.cells[0];
-      if (center) {
-        this.renderer.particles.emitExplosion(
-          center.gx * 48 + 24,
-          center.gy * 48 + 24,
-          (snapshot.arena === 'foundry' || snapshot.arena === 'magma') ? 'volatile' : 'fire'
-        );
+  private handleSnapshotFeedback(snapshot: GameSnapshot): void {
+    // 1. Detect newly placed bombs by ID
+    let playedBombSound = false;
+    const currentBombIds = new Set<string>();
+    for (const bomb of snapshot.bombs) {
+      currentBombIds.add(bomb.id);
+      if (!this.seenBombIds.has(bomb.id) && !playedBombSound) {
+        this.soundFx.playBombDrop();
+        playedBombSound = true;
       }
     }
-    this.prevExplosionCount = snapshot.explosions.length;
+    this.seenBombIds = currentBombIds;
 
-    // Sudden death warning
+    // 2. Detect all newly triggered explosions (including simultaneous chains)
+    let playedExplosionSound = false;
+    const currentExpIds = new Set<string>();
+    const theme = (snapshot.arena === 'foundry' || snapshot.arena === 'magma') ? 'volatile' : 'fire';
+    for (const exp of snapshot.explosions) {
+      currentExpIds.add(exp.id);
+      if (!this.seenExplosionIds.has(exp.id)) {
+        if (!playedExplosionSound) {
+          this.soundFx.playExplosion();
+          playedExplosionSound = true;
+        }
+        const center = exp.cells[0];
+        if (center) {
+          this.renderer.particles.emitExplosion(
+            center.gx * TILE_SIZE + TILE_SIZE / 2,
+            center.gy * TILE_SIZE + TILE_SIZE / 2,
+            theme
+          );
+        }
+      }
+    }
+    this.seenExplosionIds = currentExpIds;
+
+    // 3. Emit debris particles on newly destroyed soft/volatile blocks
+    const debrisColor = (snapshot.arena === 'foundry' || snapshot.arena === 'magma') ? '#9a3412'
+                      : (snapshot.arena === 'cryo' || snapshot.arena === 'cyber') ? '#38bdf8'
+                      : '#b45309';
+    const currentBreakingCoords = new Set<string>();
+    if (snapshot.breakingBlocks) {
+      for (const bb of snapshot.breakingBlocks) {
+        const key = `${bb.gx},${bb.gy}`;
+        currentBreakingCoords.add(key);
+        if (!this.seenBreakingCoords.has(key)) {
+          this.renderer.particles.emitBlockDebris(
+            bb.gx * TILE_SIZE + TILE_SIZE / 2,
+            bb.gy * TILE_SIZE + TILE_SIZE / 2,
+            debrisColor
+          );
+        }
+      }
+    }
+    this.seenBreakingCoords = currentBreakingCoords;
+
+    // 4. Sudden death activation siren
     if (snapshot.suddenDeathActive && !this.prevSuddenDeath) {
       this.soundFx.playSuddenDeathAlert();
     }
     this.prevSuddenDeath = snapshot.suddenDeathActive;
 
-    // Player death check
+    // 5. Local player elimination + power-up pickup chime
     const myPlayer = snapshot.players.find(p => p.id === this.myPlayerId);
     if (myPlayer) {
       if (!myPlayer.alive && this.prevMyAlive) {
         this.soundFx.playPlayerDeath();
       }
       this.prevMyAlive = myPlayer.alive;
+
+      const cur = myPlayer.powerUps;
+      if (this.prevPowerUps) {
+        const gotUpgrade =
+          cur.bombLimit > this.prevPowerUps.bombLimit ||
+          cur.fireRange > this.prevPowerUps.fireRange ||
+          cur.speed > this.prevPowerUps.speed ||
+          (cur.canKick && !this.prevPowerUps.canKick) ||
+          (cur.hasShield && !this.prevPowerUps.hasShield) ||
+          (cur.isCursed && !this.prevPowerUps.isCursed);
+        if (gotUpgrade) {
+          this.soundFx.playPowerUp();
+        }
+      }
+      this.prevPowerUps = { ...cur };
     }
   }
 
@@ -288,6 +433,9 @@ class BombermanApp {
     const alivePlayers = snapshot.players.filter(p => p.alive);
     const aliveEl = document.getElementById('hud-alive-count');
     if (aliveEl) aliveEl.textContent = `${alivePlayers.length} / ${snapshot.players.length}`;
+
+    const arenaEl = document.getElementById('hud-arena');
+    if (arenaEl) arenaEl.textContent = this.getArenaShortLabel(snapshot.arena);
 
     const timerEl = document.getElementById('hud-timer');
     if (timerEl) {
@@ -308,14 +456,31 @@ class BombermanApp {
       const bombsEl = document.getElementById('hud-bombs');
       const fireEl = document.getElementById('hud-fire');
       const speedEl = document.getElementById('hud-speed');
+      const killsEl = document.getElementById('hud-kills');
       const shieldEl = document.getElementById('hud-shield');
       const kickEl = document.getElementById('hud-kick');
+      const curseEl = document.getElementById('hud-curse');
 
       if (bombsEl) bombsEl.textContent = `BOMBAS: ${me.powerUps.bombLimit}`;
       if (fireEl) fireEl.textContent = `RAIO: ${me.powerUps.fireRange}`;
       if (speedEl) speedEl.textContent = `VEL: ${me.powerUps.speed}`;
+      if (killsEl) killsEl.textContent = `ABATES: ${me.kills}`;
       if (shieldEl) shieldEl.style.display = me.powerUps.hasShield ? 'inline' : 'none';
       if (kickEl) kickEl.style.display = me.powerUps.canKick ? 'inline' : 'none';
+      if (curseEl) curseEl.style.display = me.powerUps.isCursed ? 'inline' : 'none';
+
+      const spectatorBar = document.getElementById('spectator-bar');
+      const restartSpecBtn = document.getElementById('btn-spectator-restart') as HTMLButtonElement | null;
+      if (spectatorBar) {
+        if (snapshot.phase === 'playing' && !me.alive) {
+          spectatorBar.classList.add('active');
+          if (restartSpecBtn) {
+            restartSpecBtn.style.display = (this.isLocalMode || this.isHost) ? 'inline-flex' : 'none';
+          }
+        } else {
+          spectatorBar.classList.remove('active');
+        }
+      }
     }
 
     if (snapshot.phase === 'waiting') {
@@ -335,7 +500,7 @@ class BombermanApp {
           item.style.gap = '8px';
           item.style.border = `1px solid ${p.color}`;
           item.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${p.color};"></span>
-                           <span style="font-weight:500; font-family:'JetBrains Mono', monospace; font-size:0.85rem;">${p.name}</span>
+                           <span style="font-weight:500; font-family:'JetBrains Mono', monospace; font-size:0.85rem;">${this.escapeHtml(p.name)}</span>
                            ${p.isBot ? '<span style="font-size:0.7rem; color:#8E8E93; border:1px solid #242428; padding:1px 4px; border-radius:4px; font-family:\'JetBrains Mono\', monospace;">BOT</span>' : ''}`;
           pList.appendChild(item);
         });
@@ -350,20 +515,34 @@ class BombermanApp {
     modal.classList.add('active');
     const titleEl = document.getElementById('modal-title');
     const winnerEl = document.getElementById('modal-winner');
+    const statsEl = document.getElementById('modal-stats');
+    const playAgainBtn = document.getElementById('btn-play-again') as HTMLButtonElement | null;
+
+    if (playAgainBtn) {
+      playAgainBtn.style.display = (this.isLocalMode || this.isHost) ? 'inline-flex' : 'none';
+    }
 
     const winner = snapshot.winner;
     const isMeWinner = winner && winner.id === this.myPlayerId;
+    const me = snapshot.players.find(p => p.id === this.myPlayerId);
 
     if (isMeWinner) {
       this.soundFx.playVictory();
-      if (titleEl) titleEl.textContent = 'Partida Encerrada';
-      if (winnerEl) winnerEl.textContent = 'Resultado: Você venceu como único sobrevivente.';
+      if (titleEl) titleEl.textContent = 'Vitória Confirmada';
+      if (winnerEl) winnerEl.textContent = 'Você prevaleceu como único sobrevivente da arena.';
     } else if (winner) {
       if (titleEl) titleEl.textContent = 'Partida Encerrada';
-      if (winnerEl) winnerEl.textContent = `Resultado: Vitória de ${winner.name}.`;
+      if (winnerEl) winnerEl.textContent = `Vencedor: ${winner.name} (${winner.kills} abate${winner.kills === 1 ? '' : 's'}).`;
     } else {
-      if (titleEl) titleEl.textContent = 'Partida Encerrada';
-      if (winnerEl) winnerEl.textContent = 'Resultado: Empate técnico sem sobreviventes.';
+      if (titleEl) titleEl.textContent = 'Empate Técnico';
+      if (winnerEl) winnerEl.textContent = 'Nenhum operador sobreviveu à detonação final.';
+    }
+
+    if (statsEl) {
+      const myKills = me ? me.kills : 0;
+      const arenaLabel = this.getArenaShortLabel(snapshot.arena);
+      const colapsoLabel = snapshot.suddenDeathActive ? 'COLAPSO ATIVO' : 'TEMPO REGULAR';
+      statsEl.textContent = `SEUS ABATES: ${myKills} • ARENA: ${arenaLabel} • ${colapsoLabel}`;
     }
   }
 
@@ -379,13 +558,17 @@ class BombermanApp {
     container.innerHTML = '';
     rooms.forEach(r => {
       const tr = document.createElement('tr');
+      const safeId = this.escapeHtml(r.id);
+      const statusLabel = r.phase === 'waiting' ? 'Aberta' : r.phase === 'playing' ? 'Em Curso' : 'Encerrada';
+      const statusDotColor = r.phase === 'waiting' ? 'var(--accent)' : '#8E8E93';
+
       tr.innerHTML = `
-        <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-main);">${r.id}</td>
-        <td style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-size: 0.78rem;">${r.arena.toUpperCase()}</td>
+        <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-main);">${safeId}</td>
+        <td style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-size: 0.78rem;">${this.getArenaShortLabel(r.arena)}</td>
         <td style="font-family: 'JetBrains Mono', monospace;">${r.playerCount} / ${r.maxPlayers}</td>
-        <td><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color: var(--accent); margin-right:6px;"></span>Aberta</td>
+        <td><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color: ${statusDotColor}; margin-right:6px;"></span>${statusLabel}</td>
         <td style="text-align: right;">
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" data-join="${r.id}">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" data-join="${safeId}" ${r.phase !== 'waiting' ? 'disabled' : ''}>
             Conectar
           </button>
         </td>
@@ -414,24 +597,22 @@ class BombermanApp {
 
       const input = this.inputHandler.getInput();
 
-      // If playing locally in browser (Vercel / Offline mode)
-      if (this.isLocalMode && this.localState && this.localState.phase === 'playing') {
-        // Step bots
-        for (const [botId, ai] of this.localBots.entries()) {
-          const botInput = ai.computeInput(this.localState, dt);
-          this.localState.handleInput(botId, botInput);
+      // Local simulation in browser (100% Vercel / static hosting compatible)
+      if (this.isLocalMode && this.localState) {
+        if (this.localState.phase === 'playing') {
+          for (const [botId, ai] of this.localBots.entries()) {
+            const botInput = ai.computeInput(this.localState, dt);
+            this.localState.handleInput(botId, botInput);
+          }
+
+          this.localState.handleInput(this.myPlayerId || 'player_local', input);
+          this.localState.update(dt);
+          this.processSnapshot(this.localState.getSnapshot());
+        } else if (this.localState.phase === 'game_over') {
+          // Keep winner celebration animation & hitstop timer visually responsive
+          this.lastSnapshot = this.localState.getSnapshot();
         }
-
-        // Apply local player input
-        this.localState.handleInput(this.myPlayerId || 'player_local', input);
-
-        // Update local physics & explosions
-        this.localState.update(dt);
-
-        const snapshot = this.localState.getSnapshot();
-        this.processSnapshot(snapshot);
       } else if (!this.isLocalMode && this.lastSnapshot?.phase === 'playing') {
-        // Send input to online server
         this.socket.emit('player_input', input);
       }
 
@@ -443,7 +624,6 @@ class BombermanApp {
   }
 }
 
-// Start application when DOM loads
 window.addEventListener('DOMContentLoaded', () => {
   new BombermanApp();
 });

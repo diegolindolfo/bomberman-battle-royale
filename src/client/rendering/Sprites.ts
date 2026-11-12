@@ -3,10 +3,9 @@ import { TILE_SIZE } from '../../shared/constants.js';
 
 export class Sprites {
   private static charactersImg: HTMLImageElement | null = null;
-  private static bombsImg: HTMLImageElement | null = null;
-  private static arenasImg: HTMLImageElement | null = null;
-  private static powerupsImg: HTMLImageElement | null = null;
+  private static powerupsSheetImg: HTMLImageElement | null = null;
   private static tileImages: Record<string, HTMLImageElement> = {};
+  private static powerUpImages: Record<string, HTMLImageElement> = {};
 
   public static init(): void {
     if (typeof window === 'undefined') return;
@@ -14,26 +13,34 @@ export class Sprites {
     this.charactersImg = new Image();
     this.charactersImg.src = '/assets/robos-sem-fundo.png';
 
-    this.bombsImg = new Image();
-    this.bombsImg.src = '/assets/bombs_explosions.jpg';
+    this.powerupsSheetImg = new Image();
+    this.powerupsSheetImg.src = '/assets/powerups.jpg';
 
-    this.arenasImg = new Image();
-    this.arenasImg.src = '/assets/arenas.jpg';
-
-    this.powerupsImg = new Image();
-    this.powerupsImg.src = '/assets/powerups.jpg';
-
-    // Load individual pixel art tile assets for arenas
+    // Load individual pixel art tile assets for all 3 arenas
     const tileNames = [
       'classic_floor', 'classic_wall', 'classic_block',
-      'magma_floor', 'magma_wall', 'magma_tnt',
-      'cyber_floor', 'cyber_wall', 'cyber_conveyor', 'cyber_portal'
+      'magma_floor', 'magma_wall', 'magma_block', 'magma_tnt',
+      'cyber_floor', 'cyber_wall', 'cyber_block', 'cyber_conveyor', 'cyber_portal'
     ];
     for (const name of tileNames) {
       const img = new Image();
       img.src = `/assets/tiles/${name}.png`;
       this.tileImages[name] = img;
     }
+
+    // Load dedicated crisp cropped power-up icon PNGs
+    const powerUpNames = ['bomb_up', 'fire_up', 'speed_up', 'bomb_kick', 'shield', 'skull'];
+    for (const name of powerUpNames) {
+      const img = new Image();
+      img.src = `/assets/powerups/${name}.png`;
+      this.powerUpImages[name] = img;
+    }
+  }
+
+  private static getSoftBlockKey(arena: ArenaTheme): string {
+    if (arena === 'foundry' || arena === 'magma') return 'magma_block';
+    if (arena === 'cryo' || arena === 'cyber') return 'cyber_block';
+    return 'classic_block';
   }
 
   // Draw Arena Floor & Static Tiles using high-res pixel art assets
@@ -56,7 +63,6 @@ export class Sprites {
     if (floorImg && floorImg.complete && floorImg.naturalWidth > 0) {
       ctx.drawImage(floorImg, x, y, TILE_SIZE, TILE_SIZE);
     } else {
-      // Solid fallback
       if (arena === 'ruins' || arena === 'classic') {
         ctx.fillStyle = (gx + gy) % 2 === 0 ? '#3da443' : '#339239';
       } else if (arena === 'foundry' || arena === 'magma') {
@@ -109,7 +115,6 @@ export class Sprites {
       return;
     }
 
-    // Solid technical fallback (zero gradients)
     ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#1c1917'
                   : (arena === 'cryo' || arena === 'cyber') ? '#0284c7'
                   : '#64748b';
@@ -117,49 +122,49 @@ export class Sprites {
   }
 
   private static drawSoftBlock(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
-    const key = (arena === 'foundry' || arena === 'magma') ? 'magma_wall'
-              : (arena === 'cryo' || arena === 'cyber') ? 'cyber_wall'
-              : 'classic_block';
+    const key = this.getSoftBlockKey(arena);
     const blockImg = this.tileImages[key];
     if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
       ctx.drawImage(blockImg, x, y, TILE_SIZE, TILE_SIZE);
       return;
     }
 
-    // Solid technical fallback
-    ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#7f1d1d'
-                  : (arena === 'cryo' || arena === 'cyber') ? '#1e3a8a'
+    ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#9a3412'
+                  : (arena === 'cryo' || arena === 'cyber') ? '#38bdf8'
                   : '#b45309';
     ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
 
   private static drawIceFloor(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
-    // Crisp frozen ice patch with reduced friction
     ctx.save();
-    ctx.fillStyle = '#0e7490';
-    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    // Crisp frosted ice glaze overlay over cyber tile floor (solid colors, zero gradients)
+    ctx.fillStyle = 'rgba(14, 116, 144, 0.72)';
+    ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
-    // Crystalline frost highlights
-    ctx.strokeStyle = '#67e8f9';
+    ctx.fillStyle = 'rgba(165, 243, 252, 0.25)';
+    ctx.fillRect(x + 3, y + 3, TILE_SIZE - 6, 4);
+
+    // Crystalline frost glint lines
+    const glint = 0.55 + 0.3 * Math.sin(animTime * 3 + x * 0.1);
+    ctx.strokeStyle = `rgba(165, 243, 252, ${glint})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(x + 4, y + TILE_SIZE - 4);
-    ctx.lineTo(x + TILE_SIZE - 4, y + 4);
-    ctx.moveTo(x + 12, y + TILE_SIZE - 4);
-    ctx.lineTo(x + TILE_SIZE - 4, y + 12);
+    ctx.moveTo(x + 7, y + TILE_SIZE - 8);
+    ctx.lineTo(x + TILE_SIZE - 8, y + 7);
+    ctx.moveTo(x + 18, y + TILE_SIZE - 8);
+    ctx.lineTo(x + TILE_SIZE - 8, y + 18);
     ctx.stroke();
 
-    // Subtle edge border
     ctx.strokeStyle = '#22d3ee';
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    ctx.strokeRect(x + 1.5, y + 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
     ctx.restore();
   }
 
   private static drawVolatileBlock(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
     const tntImg = this.tileImages['magma_tnt'];
     if (tntImg && tntImg.complete && tntImg.naturalWidth > 0) {
-      const pulse = 1 + 0.05 * Math.sin(animTime * 8);
+      const pulse = 1 + 0.04 * Math.sin(animTime * 7);
       ctx.save();
       ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
       ctx.scale(pulse, pulse);
@@ -168,7 +173,6 @@ export class Sprites {
       return;
     }
 
-    // Vector fallback
     ctx.fillStyle = '#dc2626';
     ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
@@ -190,21 +194,32 @@ export class Sprites {
     else if (tile === TileType.CONVEYOR_LEFT) angle = Math.PI;
     else if (tile === TileType.CONVEYOR_RIGHT) angle = 0;
 
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
     if (conveyorImg && conveyorImg.complete && conveyorImg.naturalWidth > 0) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
       ctx.drawImage(conveyorImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
-      ctx.restore();
-      return;
+    } else {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
     }
 
-    // Vector fallback
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-    ctx.strokeStyle = '#06b6d4';
+    // Animated directional chevron ticks moving along +X (rotated cleanly)
+    const scrollOffset = ((animTime * 42) % 16) - 8;
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    for (let i = -1; i <= 1; i++) {
+      const ox = i * 14 + scrollOffset;
+      if (ox < -16 || ox > 16) continue;
+      ctx.beginPath();
+      ctx.moveTo(ox - 4, -7);
+      ctx.lineTo(ox + 3, 0);
+      ctx.lineTo(ox - 4, 7);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   private static drawTeleport(
@@ -217,21 +232,28 @@ export class Sprites {
     const portalImg = this.tileImages['cyber_portal'];
     const cx = x + TILE_SIZE / 2;
     const cy = y + TILE_SIZE / 2;
+    const isA = tile === TileType.TELEPORT_A;
 
     if (portalImg && portalImg.complete && portalImg.naturalWidth > 0) {
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(animTime * 1.5);
-      const pulse = 1 + 0.08 * Math.sin(animTime * 6);
+      ctx.rotate((isA ? 1 : -1) * animTime * 1.6);
+      const pulse = 1 + 0.06 * Math.sin(animTime * 6);
       ctx.scale(pulse, pulse);
       ctx.drawImage(portalImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.restore();
+
+      // Subtle core color cue differentiating portal pair endpoints
+      ctx.save();
+      ctx.fillStyle = isA ? '#22d3ee' : '#a855f7';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
       return;
     }
 
-    // Vector fallback
-    const isA = tile === TileType.TELEPORT_A;
-    const color = isA ? '#ec4899' : '#8b5cf6';
+    const color = isA ? '#22d3ee' : '#a855f7';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -247,16 +269,16 @@ export class Sprites {
     ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
 
     ctx.fillStyle = '#dc2626';
-    ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 20);
+    ctx.fillRect(x + 11, y + 11, TILE_SIZE - 22, TILE_SIZE - 22);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px monospace';
+    ctx.font = 'bold 14px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('X', x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+    ctx.fillText('X', x + TILE_SIZE / 2, y + TILE_SIZE / 2 + 1);
   }
 
-  // Draw 150ms crumbling animation for destroyed blocks
+  // Draw 150ms crumbling animation for destroyed blocks using exact soft-block sprite
   public static drawBreakingBlock(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -267,19 +289,16 @@ export class Sprites {
   ): void {
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
-    const progress = Math.max(0, Math.min(1, 1 - timer / maxTime)); // 0 to 1
+    const progress = Math.max(0, Math.min(1, 1 - timer / maxTime));
     const alpha = Math.max(0, 1 - progress);
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    const offset = progress * 8;
+    const offset = progress * 9;
     const half = TILE_SIZE / 2;
 
-    const key = (arena === 'foundry' || arena === 'magma') ? 'magma_wall'
-              : (arena === 'cryo' || arena === 'cyber') ? 'cyber_wall'
-              : 'classic_block';
-    const blockImg = this.tileImages[key];
+    const blockImg = this.tileImages[this.getSoftBlockKey(arena)];
 
     const quarters = [
       { sx: 0, sy: 0, dx: x - offset, dy: y - offset },
@@ -290,10 +309,14 @@ export class Sprites {
 
     for (const q of quarters) {
       if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
-        ctx.drawImage(blockImg, q.sx, q.sy, half, half, q.dx, q.dy, half, half);
+        const srcHalfW = blockImg.naturalWidth / 2;
+        const srcHalfH = blockImg.naturalHeight / 2;
+        const sx = q.sx > 0 ? srcHalfW : 0;
+        const sy = q.sy > 0 ? srcHalfH : 0;
+        ctx.drawImage(blockImg, sx, sy, srcHalfW, srcHalfH, q.dx, q.dy, half, half);
       } else {
-        ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#7f1d1d'
-                      : (arena === 'cryo' || arena === 'cyber') ? '#1e3a8a'
+        ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#9a3412'
+                      : (arena === 'cryo' || arena === 'cyber') ? '#38bdf8'
                       : '#b45309';
         ctx.fillRect(q.dx, q.dy, half - 1, half - 1);
       }
@@ -302,18 +325,18 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw Bomb with fuse spark, solid pixel shading and accelerated telegraphing pulse (<0.8s)
+  // Draw Bomb at smooth world coordinates with accelerated telegraph pulse (<0.8s)
   public static drawBomb(
     ctx: CanvasRenderingContext2D,
-    gx: number,
-    gy: number,
+    worldX: number,
+    worldY: number,
     fuseTimer: number,
-    animTime: number
+    animTime: number,
+    isSliding: boolean = false
   ): void {
-    const cx = gx * TILE_SIZE + TILE_SIZE / 2;
-    const cy = gy * TILE_SIZE + TILE_SIZE / 2;
+    const cx = worldX;
+    const cy = worldY;
 
-    // Accelerated pulse in final 0.8s
     const isTelegraphing = fuseTimer <= 0.8;
     const pulseRate = isTelegraphing ? 28 : (fuseTimer < 1.5 ? 12 : 6);
     const scale = 1 + (isTelegraphing ? 0.16 : 0.08) * Math.sin(animTime * pulseRate);
@@ -321,31 +344,39 @@ export class Sprites {
 
     ctx.save();
 
+    // Sliding highlight ring if kicked or moving on belt
+    if (isSliding) {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
     ctx.ellipse(cx, cy + 16, radius, radius * 0.45, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bomb body - Solid colors, zero gradients
+    // Bomb body (Solid colors, zero gradients)
     const isFlashing = isTelegraphing && Math.sin(animTime * 28) > 0;
     ctx.fillStyle = isFlashing ? '#ef4444' : '#0a0a0b';
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Outer border ring
     ctx.strokeStyle = isFlashing ? '#fca5a5' : '#242428';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Pixel highlight dot
+    // Highlight pixel
     ctx.fillStyle = isFlashing ? '#ffffff' : '#52525b';
     ctx.beginPath();
     ctx.arc(cx - 5, cy - 6, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Metallic cap
+    // Cap
     ctx.fillStyle = '#71717a';
     ctx.fillRect(cx - 5, cy - radius - 2, 10, 4);
 
@@ -357,7 +388,7 @@ export class Sprites {
     ctx.quadraticCurveTo(cx + 6, cy - radius - 8, cx + 3, cy - radius - 12);
     ctx.stroke();
 
-    // Glowing spark
+    // Spark tip
     const sparkX = cx + 3;
     const sparkY = cy - radius - 12;
     ctx.fillStyle = '#f59e0b';
@@ -373,7 +404,7 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw Explosion Segment
+  // Draw directional connected explosion beam segments (center, horizontal, vertical, ends)
   public static drawExplosionSegment(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -383,28 +414,77 @@ export class Sprites {
   ): void {
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
-
-    const flicker = 0.85 + 0.15 * Math.sin(animTime * 30);
+    const flicker = 0.88 + 0.12 * Math.sin(animTime * 34);
 
     ctx.save();
     ctx.globalAlpha = flicker;
 
-    // Outer flame
-    ctx.fillStyle = '#ea580c';
-    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    const outerColor = '#ea580c';
+    const midColor = '#facc15';
+    const coreColor = '#ffffff';
 
-    // Inner bright yellow
-    ctx.fillStyle = '#facc15';
-    ctx.fillRect(x + 7, y + 7, TILE_SIZE - 14, TILE_SIZE - 14);
-
-    // Center white core
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 13, y + 13, TILE_SIZE - 26, TILE_SIZE - 26);
+    if (direction === 'horizontal') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x, y + 4, TILE_SIZE, TILE_SIZE - 8);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x, y + 10, TILE_SIZE, TILE_SIZE - 20);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x, y + 17, TILE_SIZE, TILE_SIZE - 34);
+    } else if (direction === 'vertical') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x + 4, y, TILE_SIZE - 8, TILE_SIZE);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x + 10, y, TILE_SIZE - 20, TILE_SIZE);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x + 17, y, TILE_SIZE - 34, TILE_SIZE);
+    } else if (direction === 'end_up') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x + 4, y + 6, TILE_SIZE - 8, TILE_SIZE - 6);
+      ctx.fillRect(x + 10, y + 2, TILE_SIZE - 20, 6);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x + 10, y + 10, TILE_SIZE - 20, TILE_SIZE - 10);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x + 17, y + 16, TILE_SIZE - 34, TILE_SIZE - 16);
+    } else if (direction === 'end_down') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x + 4, y, TILE_SIZE - 8, TILE_SIZE - 6);
+      ctx.fillRect(x + 10, y + TILE_SIZE - 8, TILE_SIZE - 20, 6);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x + 10, y, TILE_SIZE - 20, TILE_SIZE - 10);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x + 17, y, TILE_SIZE - 34, TILE_SIZE - 16);
+    } else if (direction === 'end_left') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x + 6, y + 4, TILE_SIZE - 6, TILE_SIZE - 8);
+      ctx.fillRect(x + 2, y + 10, 6, TILE_SIZE - 20);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x + 10, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x + 16, y + 17, TILE_SIZE - 16, TILE_SIZE - 34);
+    } else if (direction === 'end_right') {
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x, y + 4, TILE_SIZE - 6, TILE_SIZE - 8);
+      ctx.fillRect(x + TILE_SIZE - 8, y + 10, 6, TILE_SIZE - 20);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x, y + 17, TILE_SIZE - 16, TILE_SIZE - 34);
+    } else {
+      // 'center' full cross intersection core
+      ctx.fillStyle = outerColor;
+      ctx.fillRect(x, y + 4, TILE_SIZE, TILE_SIZE - 8);
+      ctx.fillRect(x + 4, y, TILE_SIZE - 8, TILE_SIZE);
+      ctx.fillStyle = midColor;
+      ctx.fillRect(x + 5, y + 10, TILE_SIZE - 10, TILE_SIZE - 20);
+      ctx.fillRect(x + 10, y + 5, TILE_SIZE - 20, TILE_SIZE - 10);
+      ctx.fillStyle = coreColor;
+      ctx.fillRect(x + 14, y + 14, TILE_SIZE - 28, TILE_SIZE - 28);
+    }
 
     ctx.restore();
   }
 
-  // Draw Power-Up Item
+  // Draw crisp dedicated Power-Up icon
   public static drawPowerUp(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -413,16 +493,23 @@ export class Sprites {
     animTime: number
   ): void {
     const cx = gx * TILE_SIZE + TILE_SIZE / 2;
-    const bobY = gy * TILE_SIZE + TILE_SIZE / 2 + Math.sin(animTime * 5) * 3;
+    const bobY = gy * TILE_SIZE + TILE_SIZE / 2 + Math.sin(animTime * 5) * 2.5;
 
-    if (this.powerupsImg && this.powerupsImg.complete && this.powerupsImg.naturalWidth > 0) {
-      const img = this.powerupsImg;
+    const iconImg = this.powerUpImages[type];
+    if (iconImg && iconImg.complete && iconImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.drawImage(iconImg, cx - 17, bobY - 17, 34, 34);
+      ctx.restore();
+      return;
+    }
+
+    if (this.powerupsSheetImg && this.powerupsSheetImg.complete && this.powerupsSheetImg.naturalWidth > 0) {
+      const img = this.powerupsSheetImg;
       const w = img.naturalWidth / 3;
       const h = img.naturalHeight / 3;
 
       let col = 0;
       let row = 0;
-
       switch (type) {
         case PowerUpType.BOMB_UP: col = 0; row = 0; break;
         case PowerUpType.FIRE_UP: col = 1; row = 0; break;
@@ -433,7 +520,7 @@ export class Sprites {
       }
 
       ctx.save();
-      ctx.drawImage(img, col * w, row * h, w, h, cx - 18, bobY - 18, 36, 36);
+      ctx.drawImage(img, col * w, row * h, w, h, cx - 17, bobY - 17, 34, 34);
       ctx.restore();
       return;
     }
@@ -478,11 +565,13 @@ export class Sprites {
     alive: boolean,
     hasShield: boolean,
     isInvincible: boolean,
-    animTime: number
+    animTime: number,
+    isCursed: boolean = false,
+    isWinner: boolean = false
   ): void {
     if (!alive) {
       ctx.save();
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.35;
       ctx.strokeStyle = '#8E8E93';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -505,7 +594,9 @@ export class Sprites {
 
     ctx.save();
 
-    const bounce = isMoving ? Math.abs(Math.sin(animTime * 14)) * 3 : 0;
+    const bounce = isWinner
+      ? Math.abs(Math.sin(animTime * 10)) * 5
+      : (isMoving ? Math.abs(Math.sin(animTime * 14)) * 3 : 0);
     const py = y - bounce;
 
     // Ground Shadow
@@ -514,7 +605,7 @@ export class Sprites {
     ctx.ellipse(x, y + 14, 15, 7, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Shield Bubble
+    // Shield ring (solid alpha, zero blur)
     if (hasShield) {
       ctx.strokeStyle = '#10B981';
       ctx.lineWidth = 2;
@@ -522,6 +613,15 @@ export class Sprites {
       ctx.beginPath();
       ctx.arc(x, py, 23, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+    }
+
+    // Skull curse indicator ring
+    if (isCursed) {
+      ctx.strokeStyle = '#a855f7';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, py, 21, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -540,11 +640,12 @@ export class Sprites {
       else col = 5;
 
       let row = 0;
-      if (facing === 'down') row = 0;
+      if (isWinner) row = 3;
+      else if (facing === 'down') row = 0;
       else if (facing === 'up') row = 2;
       else row = 1;
 
-      const flip = facing === 'left';
+      const flip = !isWinner && facing === 'left';
 
       ctx.save();
       ctx.translate(x, py);
@@ -563,7 +664,6 @@ export class Sprites {
       );
       ctx.restore();
     } else {
-      // Vector fallback
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x, py + 4, 13, 0, Math.PI * 2);
@@ -599,18 +699,19 @@ export class Sprites {
     }
 
     // Name tag in JetBrains Mono
+    const label = isCursed ? `${name.substring(0, 8)} [INV]` : name.substring(0, 12);
     ctx.fillStyle = '#121214';
-    ctx.roundRect(x - 32, py - 35, 64, 14, 3);
+    ctx.roundRect(x - 39, py - 35, 78, 14, 3);
     ctx.fill();
-    ctx.strokeStyle = '#242428';
+    ctx.strokeStyle = isCursed ? '#a855f7' : '#242428';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.fillStyle = '#F4F4F5';
-    ctx.font = 'bold 9px monospace';
+    ctx.fillStyle = isCursed ? '#d8b4fe' : '#F4F4F5';
+    ctx.font = 'bold 9px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(name.substring(0, 10), x, py - 28);
+    ctx.fillText(label, x, py - 28);
 
     ctx.restore();
   }

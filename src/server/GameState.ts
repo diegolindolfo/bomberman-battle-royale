@@ -83,6 +83,10 @@ export class GameState {
     return 'ruins';
   }
 
+  public setArena(arena: ArenaTheme): void {
+    this.arena = this.normalizeArena(arena);
+  }
+
   /**
    * Procedural map generator with guaranteed L-shape (min 3 clear tiles) at all spawns
    */
@@ -144,7 +148,7 @@ export class GameState {
   }
 
   private generateRuinsProcedural(isSpawnProtected: (gx: number, gy: number) => boolean): void {
-    // Ruínas da Arena: 65% destructible block density with balanced organic clusters
+    // Ruínas da Arena: Balanced 65% destructible block density with organic symmetry
     for (let y = 1; y < GRID_ROWS - 1; y++) {
       for (let x = 1; x < GRID_COLS - 1; x++) {
         if (this.grid[y][x] === TileType.HARD_WALL || isSpawnProtected(x, y)) continue;
@@ -153,8 +157,9 @@ export class GameState {
         const symY = Math.min(y, GRID_ROWS - 1 - y);
         const seedVal = Math.sin(symX * 12.9898 + symY * 78.233) * 43758.5453;
         const noise = seedVal - Math.floor(seedVal);
+        const weighted = noise * 0.45 + Math.random() * 0.55;
 
-        if (noise < 0.65 || Math.random() < 0.60) {
+        if (weighted < 0.65) {
           this.grid[y][x] = TileType.SOFT_BLOCK;
         }
       }
@@ -162,15 +167,34 @@ export class GameState {
   }
 
   private generateCryoProcedural(isSpawnProtected: (gx: number, gy: number) => boolean): void {
-    // Laboratório Criogênico: Ice patches in open areas with crystal blocks
+    // Laboratório Criogênico: Quantum portal pair, ice acceleration lanes, and crystal blocks
+    // Place symmetrical Quantum Portals in open corridor intersections (odd, odd)
+    this.grid[3][3] = TileType.TELEPORT_A;
+    this.grid[GRID_ROWS - 4][GRID_COLS - 4] = TileType.TELEPORT_B;
+
+    // Symmetrical acceleration lanes near center wings
+    const cryoConveyors = [
+      { x: 6, y: 3, tile: TileType.CONVEYOR_RIGHT },
+      { x: 7, y: 3, tile: TileType.CONVEYOR_RIGHT },
+      { x: 8, y: 3, tile: TileType.CONVEYOR_RIGHT },
+      { x: 6, y: 9, tile: TileType.CONVEYOR_LEFT },
+      { x: 7, y: 9, tile: TileType.CONVEYOR_LEFT },
+      { x: 8, y: 9, tile: TileType.CONVEYOR_LEFT }
+    ];
+    for (const c of cryoConveyors) {
+      if (!isSpawnProtected(c.x, c.y) && this.grid[c.y][c.x] === TileType.EMPTY) {
+        this.grid[c.y][c.x] = c.tile;
+      }
+    }
+
     for (let y = 1; y < GRID_ROWS - 1; y++) {
       for (let x = 1; x < GRID_COLS - 1; x++) {
-        if (this.grid[y][x] === TileType.HARD_WALL || isSpawnProtected(x, y)) continue;
+        if (this.grid[y][x] !== TileType.EMPTY || isSpawnProtected(x, y)) continue;
 
         const rand = Math.random();
-        if (rand < 0.55) {
+        if (rand < 0.52) {
           this.grid[y][x] = TileType.SOFT_BLOCK;
-        } else if (rand < 0.85) {
+        } else if (rand < 0.88) {
           this.grid[y][x] = TileType.ICE_FLOOR;
         }
       }
@@ -178,7 +202,7 @@ export class GameState {
   }
 
   private generateFoundryProcedural(isSpawnProtected: (gx: number, gy: number) => boolean): void {
-    // Fundição Industrial: Conveyor lanes and volatile hazardous barrels
+    // Fundição Industrial: Conveyor lanes and volatile hazardous barrels (safe from spawns)
     const conveyorLanes = [
       { y: 3, fromX: 3, toX: 5, tile: TileType.CONVEYOR_RIGHT },
       { y: 3, fromX: 9, toX: 11, tile: TileType.CONVEYOR_RIGHT },
@@ -194,18 +218,34 @@ export class GameState {
       }
     }
 
+    const isNearSpawnZone = (gx: number, gy: number) =>
+      isSpawnProtected(gx, gy) ||
+      isSpawnProtected(gx - 1, gy) ||
+      isSpawnProtected(gx + 1, gy) ||
+      isSpawnProtected(gx, gy - 1) ||
+      isSpawnProtected(gx, gy + 1);
+
     for (let y = 1; y < GRID_ROWS - 1; y++) {
       for (let x = 1; x < GRID_COLS - 1; x++) {
         if (this.grid[y][x] !== TileType.EMPTY || isSpawnProtected(x, y)) continue;
 
         const rand = Math.random();
-        if (rand < 0.15) {
+        if (rand < 0.14 && !isNearSpawnZone(x, y)) {
           this.grid[y][x] = TileType.VOLATILE_BLOCK;
-        } else if (rand < 0.72) {
+        } else if (rand < 0.68) {
           this.grid[y][x] = TileType.SOFT_BLOCK;
         }
       }
     }
+  }
+
+  public getUpcomingSuddenDeathTiles(count: number = 3): { x: number; y: number }[] {
+    if (!this.suddenDeathActive) return [];
+    return this.suddenDeathPath.slice(this.suddenDeathIndex, this.suddenDeathIndex + count);
+  }
+
+  public getChainQueue(): readonly ChainReactionEntry[] {
+    return this.chainQueue;
   }
 
   private generateSuddenDeathPath(): void {
@@ -273,6 +313,8 @@ export class GameState {
       y: spawn.y,
       vx: 0,
       vy: 0,
+      desiredDx: 0,
+      desiredDy: 0,
       facing: 'down',
       isMoving: false,
       alive: true,
@@ -316,6 +358,7 @@ export class GameState {
     this.powerUps = [];
     this.breakingBlocks = [];
     this.chainQueue = [];
+    this.teleportCooldowns.clear();
     this.winner = null;
     this.hitstopTimer = 0;
 
@@ -326,7 +369,12 @@ export class GameState {
       player.y = spawn.y;
       player.vx = 0;
       player.vy = 0;
+      player.desiredDx = 0;
+      player.desiredDy = 0;
+      player.facing = 'down';
+      player.isMoving = false;
       player.alive = true;
+      player.kills = 0;
       player.activeBombs = 0;
       player.invincibleTimer = INVINCIBLE_TIME_ON_START;
       player.bombInputBufferTimer = 0;
@@ -346,43 +394,35 @@ export class GameState {
     const player = this.players.get(playerId);
     if (!player || !player.alive || this.phase !== 'playing') return;
 
-    let dx = input.dx;
-    let dy = input.dy;
+    let dx = Math.max(-1, Math.min(1, input.dx));
+    let dy = Math.max(-1, Math.min(1, input.dy));
 
     if (player.powerUps.isCursed) {
       dx = -dx;
       dy = -dy;
     }
 
-    const currentSpeed = player.powerUps.speed;
-    const isCryo = this.normalizeArena(this.arena) === 'cryo';
-
-    // In Cryogenic Lab, physics has slight low friction inertia (drift)
-    if (isCryo) {
-      if (dx !== 0) player.vx = player.vx * CRYO_ICE_FRICTION + dx * currentSpeed * (1 - CRYO_ICE_FRICTION);
-      else player.vx *= CRYO_ICE_FRICTION;
-
-      if (dy !== 0) player.vy = player.vy * CRYO_ICE_FRICTION + dy * currentSpeed * (1 - CRYO_ICE_FRICTION);
-      else player.vy *= CRYO_ICE_FRICTION;
-
-      if (Math.abs(player.vx) < 4) player.vx = 0;
-      if (Math.abs(player.vy) < 4) player.vy = 0;
-    } else {
-      player.vx = dx * currentSpeed;
-      player.vy = dy * currentSpeed;
-    }
+    player.desiredDx = dx;
+    player.desiredDy = dy;
 
     if (dx < 0) player.facing = 'left';
     else if (dx > 0) player.facing = 'right';
     else if (dy < 0) player.facing = 'up';
     else if (dy > 0) player.facing = 'down';
 
-    player.isMoving = Math.hypot(player.vx, player.vy) > 10;
-
     // Input buffering for bomb placement
     if (input.placeBomb) {
       player.bombInputBufferTimer = INPUT_BUFFER_WINDOW;
     }
+  }
+
+  private doesPlayerOverlapTile(player: PlayerState, gx: number, gy: number): boolean {
+    const r = PLAYER_HITBOX_RADIUS;
+    const leftGx = Math.floor((player.x - r) / TILE_SIZE);
+    const rightGx = Math.floor((player.x + r - 0.01) / TILE_SIZE);
+    const topGy = Math.floor((player.y - r) / TILE_SIZE);
+    const bottomGy = Math.floor((player.y + r - 0.01) / TILE_SIZE);
+    return leftGx <= gx && gx <= rightGx && topGy <= gy && gy <= bottomGy;
   }
 
   public placeBomb(player: PlayerState): boolean {
@@ -411,16 +451,27 @@ export class GameState {
       return false;
     }
 
+    // One-way passability: allow all alive players whose hitbox overlaps this tile to step off cleanly
+    const overlappingIds: string[] = [];
+    for (const p of this.players.values()) {
+      if (p.alive && (p.id === player.id || this.doesPlayerOverlapTile(p, gx, gy))) {
+        overlappingIds.push(p.id);
+      }
+    }
+
     const bomb: Bomb = {
       id: `bomb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       ownerId: player.id,
       gx,
       gy,
+      x: gx * TILE_SIZE + TILE_SIZE / 2,
+      y: gy * TILE_SIZE + TILE_SIZE / 2,
       fuseTimer: BOMB_FUSE_TIME,
       fireRange: player.powerUps.fireRange,
       slidingVx: 0,
       slidingVy: 0,
-      overlapPlayers: [player.id] // One-way passability: creator passes through until leaving tile
+      isConveyorSliding: false,
+      overlapPlayers: overlappingIds
     };
 
     this.bombs.push(bomb);
@@ -429,12 +480,24 @@ export class GameState {
   }
 
   public update(dt: number = TICK_DELTA): void {
-    if (this.phase !== 'playing') return;
-
-    // Hitstop frame freeze handling (30ms - 40ms)
+    // Hitstop frame freeze handling (30ms - 40ms), including finishing gracefully on final kill
     if (this.hitstopTimer > 0) {
-      this.hitstopTimer -= dt;
-      return; // Freeze simulation for visceral impact feel!
+      this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
+      return;
+    }
+
+    if (this.phase !== 'playing') {
+      if (this.phase === 'game_over') {
+        for (let i = this.breakingBlocks.length - 1; i >= 0; i--) {
+          this.breakingBlocks[i].timer -= dt;
+          if (this.breakingBlocks[i].timer <= 0) this.breakingBlocks.splice(i, 1);
+        }
+        for (let i = this.explosions.length - 1; i >= 0; i--) {
+          this.explosions[i].duration -= dt;
+          if (this.explosions[i].duration <= 0) this.explosions.splice(i, 1);
+        }
+      }
+      return;
     }
 
     // 1. Process Stepped Chain Reactions (50ms cascade delay)
@@ -449,7 +512,7 @@ export class GameState {
     }
 
     // 3. Timer & Sudden Death
-    this.timer -= dt;
+    this.timer = Math.max(0, this.timer - dt);
     if (this.timer <= SUDDEN_DEATH_START_TIME && !this.suddenDeathActive) {
       this.suddenDeathActive = true;
     }
@@ -504,6 +567,7 @@ export class GameState {
     this.grid[pt.y][pt.x] = TileType.SUDDEN_DEATH_BLOCK;
 
     this.powerUps = this.powerUps.filter(p => !(p.gx === pt.x && p.gy === pt.y));
+    this.breakingBlocks = this.breakingBlocks.filter(b => !(b.gx === pt.x && b.gy === pt.y));
 
     const bomb = this.bombs.find(b => b.gx === pt.x && b.gy === pt.y);
     if (bomb) {
@@ -534,42 +598,111 @@ export class GameState {
   private updateBombs(dt: number): void {
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const bomb = this.bombs[i];
+      if (!bomb) continue;
 
-      // One-Way Passability cleanup:
-      // Once player completely exits the bomb's tile boundary, remove them from overlap list!
+      // Exact AABB One-Way Passability cleanup:
+      // Keeps player passable while ANY corner of their hitbox intersects (bomb.gx, bomb.gy).
       if (bomb.overlapPlayers && bomb.overlapPlayers.length > 0) {
-        const bombCenterX = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
-        const bombCenterY = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
-
         bomb.overlapPlayers = bomb.overlapPlayers.filter(pid => {
           const p = this.players.get(pid);
           if (!p || !p.alive) return false;
-          const distX = Math.abs(p.x - bombCenterX);
-          const distY = Math.abs(p.y - bombCenterY);
-          return distX < 26 && distY < 26;
+          return this.doesPlayerOverlapTile(p, bomb.gx, bomb.gy);
         });
       }
 
-      // Conveyor Belts in Foundry
-      const tile = this.grid[bomb.gy][bomb.gx];
+      // Conveyor belts push stationary bombs cleanly across belt tiles
+      const tile = this.grid[bomb.gy]?.[bomb.gx] ?? TileType.EMPTY;
       if (bomb.slidingVx === 0 && bomb.slidingVy === 0) {
-        if (tile === TileType.CONVEYOR_UP) bomb.slidingVy = -BOMB_SLIDE_SPEED;
-        else if (tile === TileType.CONVEYOR_DOWN) bomb.slidingVy = BOMB_SLIDE_SPEED;
-        else if (tile === TileType.CONVEYOR_LEFT) bomb.slidingVx = -BOMB_SLIDE_SPEED;
-        else if (tile === TileType.CONVEYOR_RIGHT) bomb.slidingVx = BOMB_SLIDE_SPEED;
+        if (tile === TileType.CONVEYOR_UP) {
+          bomb.slidingVy = -95;
+          bomb.isConveyorSliding = true;
+        } else if (tile === TileType.CONVEYOR_DOWN) {
+          bomb.slidingVy = 95;
+          bomb.isConveyorSliding = true;
+        } else if (tile === TileType.CONVEYOR_LEFT) {
+          bomb.slidingVx = -95;
+          bomb.isConveyorSliding = true;
+        } else if (tile === TileType.CONVEYOR_RIGHT) {
+          bomb.slidingVx = 95;
+          bomb.isConveyorSliding = true;
+        }
       }
 
-      // Sliding Bomb physics
+      // Sub-pixel sliding bomb physics
       if (bomb.slidingVx !== 0 || bomb.slidingVy !== 0) {
-        const nextGx = bomb.gx + (bomb.slidingVx > 0 ? 1 : bomb.slidingVx < 0 ? -1 : 0);
-        const nextGy = bomb.gy + (bomb.slidingVy > 0 ? 1 : bomb.slidingVy < 0 ? -1 : 0);
+        const nextX = bomb.x + bomb.slidingVx * dt;
+        const nextY = bomb.y + bomb.slidingVy * dt;
 
-        if (this.isTileBlockedForBomb(nextGx, nextGy)) {
+        const dirX = Math.sign(bomb.slidingVx);
+        const dirY = Math.sign(bomb.slidingVy);
+        const leadX = nextX + dirX * (TILE_SIZE / 2 - 2);
+        const leadY = nextY + dirY * (TILE_SIZE / 2 - 2);
+        const frontGx = Math.floor(leadX / TILE_SIZE);
+        const frontGy = Math.floor(leadY / TILE_SIZE);
+
+        const movingToNewTile = frontGx !== bomb.gx || frontGy !== bomb.gy;
+        let blocked = false;
+
+        if (movingToNewTile && this.isTileBlockedForBomb(frontGx, frontGy, bomb)) {
+          blocked = true;
+        } else {
+          // Stop if colliding with any alive player (not inside overlapPlayers) ahead of bomb
+          for (const p of this.players.values()) {
+            if (!p.alive || bomb.overlapPlayers.includes(p.id)) continue;
+            if (Math.abs(p.x - nextX) < TILE_SIZE / 2 + PLAYER_HITBOX_RADIUS - 3 &&
+                Math.abs(p.y - nextY) < TILE_SIZE / 2 + PLAYER_HITBOX_RADIUS - 3) {
+              blocked = true;
+              break;
+            }
+          }
+        }
+
+        if (blocked) {
+          bomb.x = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
+          bomb.y = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
           bomb.slidingVx = 0;
           bomb.slidingVy = 0;
+          bomb.isConveyorSliding = false;
         } else {
-          bomb.gx = nextGx;
-          bomb.gy = nextGy;
+          bomb.x = nextX;
+          bomb.y = nextY;
+          bomb.gx = Math.floor(bomb.x / TILE_SIZE);
+          bomb.gy = Math.floor(bomb.y / TILE_SIZE);
+
+          // If conveyor-carried bomb reached a non-conveyor tile center, snap & stop
+          const newTile = this.grid[bomb.gy]?.[bomb.gx] ?? TileType.EMPTY;
+          const isStillOnConveyor =
+            newTile === TileType.CONVEYOR_UP ||
+            newTile === TileType.CONVEYOR_DOWN ||
+            newTile === TileType.CONVEYOR_LEFT ||
+            newTile === TileType.CONVEYOR_RIGHT;
+
+          if (bomb.isConveyorSliding && !isStillOnConveyor) {
+            const cX = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
+            const cY = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
+            if (Math.hypot(bomb.x - cX, bomb.y - cY) < 4) {
+              bomb.x = cX;
+              bomb.y = cY;
+              bomb.slidingVx = 0;
+              bomb.slidingVy = 0;
+              bomb.isConveyorSliding = false;
+            }
+          }
+
+          // Quantum portal teleportation for kicked bombs
+          if (!bomb.isConveyorSliding && (newTile === TileType.TELEPORT_A || newTile === TileType.TELEPORT_B)) {
+            const cX = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
+            const cY = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
+            if (Math.hypot(bomb.x - cX, bomb.y - cY) < 8) {
+              const targetPortal = this.findMatchingPortal(newTile);
+              if (targetPortal && !this.isTileBlockedForBomb(targetPortal.gx, targetPortal.gy, bomb)) {
+                bomb.gx = targetPortal.gx;
+                bomb.gy = targetPortal.gy;
+                bomb.x = targetPortal.gx * TILE_SIZE + TILE_SIZE / 2 + dirX * 14;
+                bomb.y = targetPortal.gy * TILE_SIZE + TILE_SIZE / 2 + dirY * 14;
+              }
+            }
+          }
         }
       }
 
@@ -581,12 +714,26 @@ export class GameState {
     }
   }
 
-  private isTileBlockedForBomb(gx: number, gy: number): boolean {
+  private findMatchingPortal(sourceTile: TileType): { gx: number; gy: number } | null {
+    const targetTile = sourceTile === TileType.TELEPORT_A ? TileType.TELEPORT_B : TileType.TELEPORT_A;
+    for (let y = 0; y < GRID_ROWS; y++) {
+      for (let x = 0; x < GRID_COLS; x++) {
+        if (this.grid[y][x] === targetTile) {
+          return { gx: x, gy: y };
+        }
+      }
+    }
+    return null;
+  }
+
+  private isTileBlockedForBomb(gx: number, gy: number, ignoreBomb?: Bomb): boolean {
     if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return true;
     const tile = this.grid[gy][gx];
     if (
       tile !== TileType.EMPTY &&
       tile !== TileType.ICE_FLOOR &&
+      tile !== TileType.TELEPORT_A &&
+      tile !== TileType.TELEPORT_B &&
       tile !== TileType.CONVEYOR_UP &&
       tile !== TileType.CONVEYOR_DOWN &&
       tile !== TileType.CONVEYOR_LEFT &&
@@ -594,7 +741,7 @@ export class GameState {
     ) {
       return true;
     }
-    if (this.bombs.some(b => b.gx === gx && b.gy === gy)) {
+    if (this.bombs.some(b => b !== ignoreBomb && b.gx === gx && b.gy === gy)) {
       return true;
     }
     return false;
@@ -621,6 +768,8 @@ export class GameState {
       { dx: 1, dy: 0, dir: 'horizontal', endDir: 'end_right' }
     ];
 
+    const visitedVolatile = new Set<string>();
+
     for (const d of directions) {
       for (let dist = 1; dist <= bomb.fireRange; dist++) {
         const gx = bomb.gx + d.dx * dist;
@@ -641,7 +790,7 @@ export class GameState {
           this.chainQueue.push({ bomb: hitBomb, delayTimer: CHAIN_REACTION_DELAY });
         }
 
-        const isEnd = dist === bomb.fireRange;
+        const isEnd = dist === bomb.fireRange || tile === TileType.SOFT_BLOCK || tile === TileType.VOLATILE_BLOCK;
         cells.push({
           gx,
           gy,
@@ -656,11 +805,11 @@ export class GameState {
           break; // Does NOT penetrate through multiple soft blocks!
         }
 
-        // Volatile Block (Foundry/TNT): triggers immediate burst and stops
+        // Volatile Block (Foundry/TNT): triggers immediate radial burst and stops
         if (tile === TileType.VOLATILE_BLOCK) {
           this.grid[gy][gx] = TileType.EMPTY;
           this.breakingBlocks.push({ gx, gy, timer: BLOCK_BREAK_DURATION, maxTime: BLOCK_BREAK_DURATION });
-          this.triggerVolatileBurst(gx, gy);
+          this.triggerVolatileBurst(gx, gy, bomb.ownerId, visitedVolatile);
           break;
         }
       }
@@ -668,35 +817,65 @@ export class GameState {
 
     this.explosions.push({
       id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ownerId: bomb.ownerId,
       cells,
       duration: EXPLOSION_DURATION
     });
   }
 
-  private triggerVolatileBurst(gx: number, gy: number): void {
+  private triggerVolatileBurst(
+    gx: number,
+    gy: number,
+    ownerId: string,
+    visited: Set<string> = new Set()
+  ): void {
+    const key = `${gx},${gy}`;
+    if (visited.has(key)) return;
+    visited.add(key);
+
     const burstCells: ExplosionCell[] = [{ gx, gy, direction: 'center' }];
-    const offsets = [
-      { dx: 0, dy: -1, dir: 'end_up' as const },
-      { dx: 0, dy: 1, dir: 'end_down' as const },
-      { dx: -1, dy: 0, dir: 'end_left' as const },
-      { dx: 1, dy: 0, dir: 'end_right' as const }
+    const offsets: { dx: number; dy: number; dir: ExplosionCell['direction'] }[] = [
+      { dx: 0, dy: -1, dir: 'end_up' },
+      { dx: 0, dy: 1, dir: 'end_down' },
+      { dx: -1, dy: 0, dir: 'end_left' },
+      { dx: 1, dy: 0, dir: 'end_right' },
+      { dx: -1, dy: -1, dir: 'center' },
+      { dx: 1, dy: -1, dir: 'center' },
+      { dx: -1, dy: 1, dir: 'center' },
+      { dx: 1, dy: 1, dir: 'center' }
     ];
 
     for (const o of offsets) {
       const nx = gx + o.dx;
       const ny = gy + o.dy;
-      if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
-        if (this.grid[ny][nx] === TileType.SOFT_BLOCK) {
-          this.grid[ny][nx] = TileType.EMPTY;
-          this.breakingBlocks.push({ gx: nx, gy: ny, timer: BLOCK_BREAK_DURATION, maxTime: BLOCK_BREAK_DURATION });
-          this.rollPowerUpDrop(nx, ny);
-        }
-        burstCells.push({ gx: nx, gy: ny, direction: o.dir });
+      if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+
+      const tile = this.grid[ny][nx];
+      if (tile === TileType.HARD_WALL || tile === TileType.SUDDEN_DEATH_BLOCK) {
+        continue;
       }
+
+      if (tile === TileType.SOFT_BLOCK) {
+        this.grid[ny][nx] = TileType.EMPTY;
+        this.breakingBlocks.push({ gx: nx, gy: ny, timer: BLOCK_BREAK_DURATION, maxTime: BLOCK_BREAK_DURATION });
+        this.rollPowerUpDrop(nx, ny);
+      } else if (tile === TileType.VOLATILE_BLOCK) {
+        this.grid[ny][nx] = TileType.EMPTY;
+        this.breakingBlocks.push({ gx: nx, gy: ny, timer: BLOCK_BREAK_DURATION, maxTime: BLOCK_BREAK_DURATION });
+        this.triggerVolatileBurst(nx, ny, ownerId, visited);
+      }
+
+      const hitBomb = this.bombs.find(b => b.gx === nx && b.gy === ny);
+      if (hitBomb && !this.chainQueue.some(e => e.bomb === hitBomb)) {
+        this.chainQueue.push({ bomb: hitBomb, delayTimer: CHAIN_REACTION_DELAY });
+      }
+
+      burstCells.push({ gx: nx, gy: ny, direction: o.dir });
     }
 
     this.explosions.push({
       id: `vol_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ownerId,
       cells: burstCells,
       duration: EXPLOSION_DURATION
     });
@@ -723,8 +902,53 @@ export class GameState {
     });
   }
 
+  private isTileWalkableForPlayer(gx: number, gy: number, player: PlayerState): boolean {
+    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return false;
+    const tile = this.grid[gy][gx];
+    if (
+      tile === TileType.HARD_WALL ||
+      tile === TileType.SOFT_BLOCK ||
+      tile === TileType.VOLATILE_BLOCK ||
+      tile === TileType.SUDDEN_DEATH_BLOCK
+    ) {
+      return false;
+    }
+    const bomb = this.bombs.find(b => b.gx === gx && b.gy === gy);
+    if (bomb && !(bomb.overlapPlayers && bomb.overlapPlayers.includes(player.id))) {
+      return false;
+    }
+    return true;
+  }
+
+  private tryKickBlockingBomb(player: PlayerState, nextX: number, nextY: number, dirX: number, dirY: number): boolean {
+    if (!player.powerUps.canKick) return false;
+    const r = PLAYER_HITBOX_RADIUS;
+    const leftGx = Math.floor((nextX - r) / TILE_SIZE);
+    const rightGx = Math.floor((nextX + r - 0.01) / TILE_SIZE);
+    const topGy = Math.floor((nextY - r) / TILE_SIZE);
+    const bottomGy = Math.floor((nextY + r - 0.01) / TILE_SIZE);
+
+    for (const bomb of this.bombs) {
+      if (bomb.slidingVx !== 0 || bomb.slidingVy !== 0) continue;
+      if (bomb.overlapPlayers && bomb.overlapPlayers.includes(player.id)) continue;
+
+      if (bomb.gx >= leftGx && bomb.gx <= rightGx && bomb.gy >= topGy && bomb.gy <= bottomGy) {
+        const destGx = bomb.gx + dirX;
+        const destGy = bomb.gy + dirY;
+        if (!this.isTileBlockedForBomb(destGx, destGy, bomb)) {
+          bomb.slidingVx = dirX * BOMB_SLIDE_SPEED;
+          bomb.slidingVy = dirY * BOMB_SLIDE_SPEED;
+          bomb.isConveyorSliding = false;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   private updatePlayers(dt: number): void {
-    const playerRadius = PLAYER_HITBOX_RADIUS;
+    const r = PLAYER_HITBOX_RADIUS;
+    const isCryoArena = this.normalizeArena(this.arena) === 'cryo';
 
     for (const player of this.players.values()) {
       if (!player.alive) continue;
@@ -740,6 +964,11 @@ export class GameState {
         }
       }
 
+      const tpCd = this.teleportCooldowns.get(player.id) ?? 0;
+      if (tpCd > 0) {
+        this.teleportCooldowns.set(player.id, Math.max(0, tpCd - dt));
+      }
+
       // Input buffer execution for bomb placement
       if (player.bombInputBufferTimer > 0) {
         player.bombInputBufferTimer -= dt;
@@ -749,53 +978,145 @@ export class GameState {
         }
       }
 
-      // Conveyor Belt transport in Foundry
+      // Frame-rate-independent Velocity & Cryogenic Ice Drift
       const curGx = Math.floor(player.x / TILE_SIZE);
       const curGy = Math.floor(player.y / TILE_SIZE);
-      if (curGx >= 0 && curGx < GRID_COLS && curGy >= 0 && curGy < GRID_ROWS) {
-        const tile = this.grid[curGy][curGx];
-        const conveyorSpeed = 95 * dt;
-        if (tile === TileType.CONVEYOR_UP) player.y -= conveyorSpeed;
-        else if (tile === TileType.CONVEYOR_DOWN) player.y += conveyorSpeed;
-        else if (tile === TileType.CONVEYOR_LEFT) player.x -= conveyorSpeed;
-        else if (tile === TileType.CONVEYOR_RIGHT) player.x += conveyorSpeed;
+      const tileUnder = this.grid[curGy]?.[curGx] ?? TileType.EMPTY;
+      const onIcePatch = tileUnder === TileType.ICE_FLOOR;
+
+      let dX = player.desiredDx;
+      let dY = player.desiredDy;
+      const speed = player.powerUps.speed;
+
+      // Normalize diagonal speed ONLY when both axes can advance freely (preserves 100% speed sliding along walls)
+      if (dX !== 0 && dY !== 0) {
+        const testX = this.canPlayerMoveTo(player.x + Math.sign(dX) * 4, player.y, r, player);
+        const testY = this.canPlayerMoveTo(player.x, player.y + Math.sign(dY) * 4, r, player);
+        if (testX && testY) {
+          const inv = 1 / Math.hypot(dX, dY);
+          dX *= inv;
+          dY *= inv;
+        }
       }
 
-      // --- CORNER ROUNDING (DESLIZAMENTO DE QUINA - <40% NUDGE) ---
+      const targetVx = dX * speed;
+      const targetVy = dY * speed;
 
-      // Horizontal Movement
+      if (onIcePatch) {
+        const keep = Math.pow(0.05, dt); // smooth crystalline glide
+        player.vx = player.vx * keep + targetVx * (1 - keep);
+        player.vy = player.vy * keep + targetVy * (1 - keep);
+      } else if (isCryoArena) {
+        const keep = Math.pow(0.0001, dt); // light snappy inertia on sub-zero lab floor
+        player.vx = player.vx * keep + targetVx * (1 - keep);
+        player.vy = player.vy * keep + targetVy * (1 - keep);
+      } else {
+        player.vx = targetVx;
+        player.vy = targetVy;
+      }
+
+      if (Math.abs(player.vx) < 3 && targetVx === 0) player.vx = 0;
+      if (Math.abs(player.vy) < 3 && targetVy === 0) player.vy = 0;
+      player.isMoving = Math.hypot(player.vx, player.vy) > 10;
+
+      // Conveyor Belt transport (collision-safe!)
+      if (curGx >= 0 && curGx < GRID_COLS && curGy >= 0 && curGy < GRID_ROWS) {
+        const convStep = 95 * dt;
+        if (tileUnder === TileType.CONVEYOR_UP && this.canPlayerMoveTo(player.x, player.y - convStep, r, player)) {
+          player.y -= convStep;
+        } else if (tileUnder === TileType.CONVEYOR_DOWN && this.canPlayerMoveTo(player.x, player.y + convStep, r, player)) {
+          player.y += convStep;
+        } else if (tileUnder === TileType.CONVEYOR_LEFT && this.canPlayerMoveTo(player.x - convStep, player.y, r, player)) {
+          player.x -= convStep;
+        } else if (tileUnder === TileType.CONVEYOR_RIGHT && this.canPlayerMoveTo(player.x + convStep, player.y, r, player)) {
+          player.x += convStep;
+        }
+      }
+
+      // --- HORIZONTAL MOVEMENT + EXACT CORNER ROUNDING (<40% NUDGE) + KICK ---
       if (player.vx !== 0) {
         const nextX = player.x + player.vx * dt;
-        const canMoveX = this.canPlayerMoveTo(nextX, player.y, playerRadius, player);
-        if (canMoveX) {
+        if (this.canPlayerMoveTo(nextX, player.y, r, player)) {
           player.x = nextX;
         } else {
-          // If blocked by corner (< 40% of tile = 19px), apply automatic perpendicular nudge
-          const corridorCenterY = Math.floor(player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
-          const diffY = corridorCenterY - player.y;
-          if (Math.abs(diffY) > 0.5 && Math.abs(diffY) <= CORNER_ROUNDING_THRESHOLD) {
-            const nudgeStepY = Math.sign(diffY) * Math.min(Math.abs(diffY), player.powerUps.speed * dt * 0.95);
-            if (this.canPlayerMoveTo(player.x, player.y + nudgeStepY, playerRadius, player)) {
-              player.y += nudgeStepY;
+          // Kick stationary bomb if walking against one
+          this.tryKickBlockingBomb(player, nextX, player.y, Math.sign(player.vx), 0);
+
+          // Exact leading-edge corner rounding into open adjacent corridor
+          const targetGx = Math.floor((nextX + Math.sign(player.vx) * r - (player.vx > 0 ? 0.01 : 0)) / TILE_SIZE);
+          const topGy = Math.floor((player.y - r) / TILE_SIZE);
+          const bottomGy = Math.floor((player.y + r - 0.01) / TILE_SIZE);
+
+          if (topGy !== bottomGy) {
+            const topOpen = this.isTileWalkableForPlayer(targetGx, topGy, player);
+            const bottomOpen = this.isTileWalkableForPlayer(targetGx, bottomGy, player);
+
+            if (topOpen && !bottomOpen) {
+              const overlap = (player.y + r) - bottomGy * TILE_SIZE;
+              if (overlap > 0 && overlap <= CORNER_ROUNDING_THRESHOLD) {
+                const nudge = -Math.min(overlap + 0.5, speed * dt * 1.15);
+                if (this.canPlayerMoveTo(player.x, player.y + nudge, r, player)) {
+                  player.y += nudge;
+                  if (this.canPlayerMoveTo(nextX, player.y, r, player)) {
+                    player.x = nextX;
+                  }
+                }
+              }
+            } else if (!topOpen && bottomOpen) {
+              const overlap = bottomGy * TILE_SIZE - (player.y - r);
+              if (overlap > 0 && overlap <= CORNER_ROUNDING_THRESHOLD) {
+                const nudge = Math.min(overlap + 0.5, speed * dt * 1.15);
+                if (this.canPlayerMoveTo(player.x, player.y + nudge, r, player)) {
+                  player.y += nudge;
+                  if (this.canPlayerMoveTo(nextX, player.y, r, player)) {
+                    player.x = nextX;
+                  }
+                }
+              }
             }
           }
         }
       }
 
-      // Vertical Movement
+      // --- VERTICAL MOVEMENT + EXACT CORNER ROUNDING (<40% NUDGE) + KICK ---
       if (player.vy !== 0) {
         const nextY = player.y + player.vy * dt;
-        const canMoveY = this.canPlayerMoveTo(player.x, nextY, playerRadius, player);
-        if (canMoveY) {
+        if (this.canPlayerMoveTo(player.x, nextY, r, player)) {
           player.y = nextY;
         } else {
-          // If blocked by corner (< 40% of tile = 19px), apply automatic perpendicular nudge
-          const corridorCenterX = Math.floor(player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
-          const diffX = corridorCenterX - player.x;
-          if (Math.abs(diffX) > 0.5 && Math.abs(diffX) <= CORNER_ROUNDING_THRESHOLD) {
-            const nudgeStepX = Math.sign(diffX) * Math.min(Math.abs(diffX), player.powerUps.speed * dt * 0.95);
-            if (this.canPlayerMoveTo(player.x + nudgeStepX, player.y, playerRadius, player)) {
-              player.x += nudgeStepX;
+          // Kick stationary bomb if walking against one
+          this.tryKickBlockingBomb(player, player.x, nextY, 0, Math.sign(player.vy));
+
+          const targetGy = Math.floor((nextY + Math.sign(player.vy) * r - (player.vy > 0 ? 0.01 : 0)) / TILE_SIZE);
+          const leftGx = Math.floor((player.x - r) / TILE_SIZE);
+          const rightGx = Math.floor((player.x + r - 0.01) / TILE_SIZE);
+
+          if (leftGx !== rightGx) {
+            const leftOpen = this.isTileWalkableForPlayer(leftGx, targetGy, player);
+            const rightOpen = this.isTileWalkableForPlayer(rightGx, targetGy, player);
+
+            if (leftOpen && !rightOpen) {
+              const overlap = (player.x + r) - rightGx * TILE_SIZE;
+              if (overlap > 0 && overlap <= CORNER_ROUNDING_THRESHOLD) {
+                const nudge = -Math.min(overlap + 0.5, speed * dt * 1.15);
+                if (this.canPlayerMoveTo(player.x + nudge, player.y, r, player)) {
+                  player.x += nudge;
+                  if (this.canPlayerMoveTo(player.x, nextY, r, player)) {
+                    player.y = nextY;
+                  }
+                }
+              }
+            } else if (!leftOpen && rightOpen) {
+              const overlap = rightGx * TILE_SIZE - (player.x - r);
+              if (overlap > 0 && overlap <= CORNER_ROUNDING_THRESHOLD) {
+                const nudge = Math.min(overlap + 0.5, speed * dt * 1.15);
+                if (this.canPlayerMoveTo(player.x + nudge, player.y, r, player)) {
+                  player.x += nudge;
+                  if (this.canPlayerMoveTo(player.x, nextY, r, player)) {
+                    player.y = nextY;
+                  }
+                }
+              }
             }
           }
         }
@@ -812,19 +1133,20 @@ export class GameState {
         }
       }
 
-      // Bomb Kick interaction
-      if (player.powerUps.canKick) {
-        for (const bomb of this.bombs) {
-          if (bomb.slidingVx === 0 && bomb.slidingVy === 0) {
-            const bCenterX = bomb.gx * TILE_SIZE + TILE_SIZE / 2;
-            const bCenterY = bomb.gy * TILE_SIZE + TILE_SIZE / 2;
-            const dist = Math.hypot(player.x - bCenterX, player.y - bCenterY);
-            if (dist < 26) {
-              if (player.facing === 'left') bomb.slidingVx = -BOMB_SLIDE_SPEED;
-              else if (player.facing === 'right') bomb.slidingVx = BOMB_SLIDE_SPEED;
-              else if (player.facing === 'up') bomb.slidingVy = -BOMB_SLIDE_SPEED;
-              else if (player.facing === 'down') bomb.slidingVy = BOMB_SLIDE_SPEED;
-            }
+      // Quantum Portal Teleportation (TELEPORT_A <-> TELEPORT_B)
+      const portalTile = this.grid[pGy]?.[pGx];
+      if ((portalTile === TileType.TELEPORT_A || portalTile === TileType.TELEPORT_B) &&
+          (this.teleportCooldowns.get(player.id) ?? 0) <= 0) {
+        const cX = pGx * TILE_SIZE + TILE_SIZE / 2;
+        const cY = pGy * TILE_SIZE + TILE_SIZE / 2;
+        if (Math.hypot(player.x - cX, player.y - cY) < 14) {
+          const dest = this.findMatchingPortal(portalTile);
+          if (dest && !this.bombs.some(b => b.gx === dest.gx && b.gy === dest.gy)) {
+            player.x = dest.gx * TILE_SIZE + TILE_SIZE / 2;
+            player.y = dest.gy * TILE_SIZE + TILE_SIZE / 2;
+            player.vx *= 0.25;
+            player.vy *= 0.25;
+            this.teleportCooldowns.set(player.id, 1.6);
           }
         }
       }
@@ -833,9 +1155,9 @@ export class GameState {
 
   private canPlayerMoveTo(x: number, y: number, radius: number, player: PlayerState): boolean {
     const leftGx = Math.floor((x - radius) / TILE_SIZE);
-    const rightGx = Math.floor((x + radius) / TILE_SIZE);
+    const rightGx = Math.floor((x + radius - 0.01) / TILE_SIZE);
     const topGy = Math.floor((y - radius) / TILE_SIZE);
-    const bottomGy = Math.floor((y + radius) / TILE_SIZE);
+    const bottomGy = Math.floor((y + radius - 0.01) / TILE_SIZE);
 
     for (let gy = topGy; gy <= bottomGy; gy++) {
       for (let gx = leftGx; gx <= rightGx; gx++) {
@@ -851,7 +1173,7 @@ export class GameState {
           return false;
         }
 
-        // Bomb collision: one-way passability for player who spawned it until they exit
+        // Bomb collision: one-way passability for overlapping players until they step off tile
         const bomb = this.bombs.find(b => b.gx === gx && b.gy === gy);
         if (bomb) {
           if (bomb.overlapPlayers && bomb.overlapPlayers.includes(player.id)) {
@@ -910,6 +1232,10 @@ export class GameState {
               player.invincibleTimer = 1.5;
             } else {
               player.alive = false;
+              if (exp.ownerId && exp.ownerId !== player.id) {
+                const killer = this.players.get(exp.ownerId);
+                if (killer) killer.kills++;
+              }
               // Trigger 35ms hitstop on player elimination!
               this.hitstopTimer = HITSTOP_DURATION;
             }

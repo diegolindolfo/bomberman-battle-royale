@@ -360,6 +360,25 @@
       background-color: var(--bg-surface-hover);
     }
 
+    .inline-notice {
+      display: none;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      border: 1px solid var(--border-active);
+      border-left: 3px solid var(--danger);
+      border-radius: var(--radius);
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-size: 0.82rem;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .inline-notice.active {
+      display: flex;
+    }
+
     /* HUD Bar */
     #hud {
       width: 100%;
@@ -367,6 +386,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
       background-color: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-bottom: none;
@@ -384,7 +405,7 @@
 
     .hud-metric-label {
       color: var(--text-muted);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
     }
 
     .hud-metric-value {
@@ -393,7 +414,7 @@
     }
 
     .hud-timer-badge {
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 700;
       color: var(--text-main);
       padding: 2px 8px;
@@ -409,9 +430,10 @@
 
     .hud-telemetry {
       display: flex;
-      gap: 14px;
+      gap: 12px;
       color: var(--text-muted);
-      font-size: 0.78rem;
+      font-size: 0.75rem;
+      flex-wrap: wrap;
     }
 
     /* Canvas Frame */
@@ -423,7 +445,6 @@
       justify-content: center;
       background-color: #000000;
       border: 1px solid var(--border-subtle);
-      border-radius: 0 0 var(--radius) var(--radius);
       overflow: hidden;
     }
 
@@ -433,6 +454,54 @@
       aspect-ratio: 720 / 624;
       display: block;
       image-rendering: pixelated;
+    }
+
+    /* Spectator Bar & Compact Keybind Footer */
+    #spectator-bar {
+      display: none;
+      width: 100%;
+      max-width: 720px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-top: none;
+      padding: 10px 16px;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    #spectator-bar.active {
+      display: flex;
+    }
+
+    .spectator-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .spectator-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .controls-footer {
+      width: 100%;
+      max-width: 720px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     /* Touch Controls */
@@ -501,7 +570,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(10, 10, 11, 0.85);
+      background-color: rgba(10, 10, 11, 0.88);
       display: none;
       align-items: center;
       justify-content: center;
@@ -545,10 +614,20 @@
 
     .modal-winner {
       font-family: 'Inter', sans-serif;
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      margin-bottom: 24px;
+      font-size: 0.92rem;
+      color: var(--text-main);
+      margin-bottom: 12px;
       line-height: 1.5;
+    }
+
+    .modal-stats {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 0;
+      margin-bottom: 22px;
     }
 
     .modal-actions {
@@ -579,12 +658,12 @@
     <div class="header-inner">
       <div class="brand">
         <span class="brand-title">Bomberman Royale</span>
-        <span class="brand-version">v1.2.0</span>
+        <span class="brand-version">v1.3.0</span>
       </div>
       <div class="header-controls">
         <div class="status-indicator">
-          <span class="status-dot"></span>
-          <span>Rede Ativa</span>
+          <span id="connection-status-dot" class="status-dot" style="background-color: #8E8E93;"></span>
+          <span id="connection-status-text">Modo Local</span>
         </div>
         <button id="btn-sound-toggle" class="btn btn-secondary">Áudio: Ativo</button>
       </div>
@@ -603,6 +682,12 @@
         </div>
       </div>
 
+      <!-- Inline Notice -->
+      <div id="lobby-notice" class="inline-notice" role="status">
+        <span id="lobby-notice-text"></span>
+        <button id="btn-dismiss-notice" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem;">Fechar</button>
+      </div>
+
       <!-- Player & Quick Action Panel -->
       <div class="panel">
         <div class="panel-header">
@@ -617,29 +702,29 @@
         </div>
       </div>
 
-      <!-- Arena Selection List (Structured table instead of generic cards) -->
+      <!-- Arena Selection List -->
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Seleção de Arena</span>
-          <span class="panel-meta">3 Ambientes Disponíveis</span>
+          <span class="panel-meta">3 Ambientes Procedurais</span>
         </div>
         <div class="arena-table">
           <div class="arena-row selected" data-arena="ruins">
             <span class="arena-id">ARENA-01</span>
             <span class="arena-name">Ruínas da Arena</span>
-            <span class="arena-mechanic">Clássico equilibrado, densidade de 65% de blocos destrutíveis e corredores simétricos.</span>
+            <span class="arena-mechanic">Clássico equilibrado, 65% de blocos destrutíveis e rotas simétricas.</span>
             <span class="arena-status">Selecionada</span>
           </div>
           <div class="arena-row" data-arena="cryo">
             <span class="arena-id">ARENA-02</span>
             <span class="arena-name">Laboratório Criogênico</span>
-            <span class="arena-mechanic">Pisos de gelo com inércia e baixa fricção, esteiras aceleradoras e portas quânticas.</span>
+            <span class="arena-mechanic">Placas de gelo de baixa fricção, esteiras aceleradoras e portais quânticos.</span>
             <span class="arena-status">Disponível</span>
           </div>
           <div class="arena-row" data-arena="foundry">
             <span class="arena-id">ARENA-03</span>
             <span class="arena-name">Fundição Industrial</span>
-            <span class="arena-mechanic">Esteiras mecânicas de transporte contínuo e barris voláteis de TNT de perigo imediato.</span>
+            <span class="arena-mechanic">Esteiras contínuas que deslocam operadores e bombas + barris voláteis TNT.</span>
             <span class="arena-status">Disponível</span>
           </div>
         </div>
@@ -649,7 +734,7 @@
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Sessões Multiplayer</span>
-          <span class="panel-meta">P2P / WebSockets</span>
+          <span class="panel-meta">WebSockets / Bots Locais</span>
         </div>
         <div class="form-row">
           <button id="btn-create-room" class="btn btn-secondary">
@@ -710,21 +795,39 @@
     <div id="screen-game" class="screen">
       <div id="hud">
         <div class="hud-metric">
-          <span class="hud-metric-label">SOBREVIVENTES:</span>
+          <span class="hud-metric-label">ATIVOS:</span>
           <span class="hud-metric-value" id="hud-alive-count">4 / 4</span>
+          <span class="hud-metric-label" style="margin-left: 8px;">ARENA:</span>
+          <span class="hud-metric-value" id="hud-arena">RUÍNAS</span>
         </div>
         <div class="hud-timer-badge" id="hud-timer">02:30</div>
         <div class="hud-telemetry">
           <span id="hud-bombs">BOMBAS: 1</span>
           <span id="hud-fire">RAIO: 2</span>
-          <span id="hud-speed">VEL: 160</span>
+          <span id="hud-speed">VEL: 165</span>
+          <span id="hud-kills">ABATES: 0</span>
           <span id="hud-shield" style="display:none; color: var(--accent);">ESCUDO</span>
           <span id="hud-kick" style="display:none; color: var(--accent);">CHUTE</span>
+          <span id="hud-curse" style="display:none; color: var(--danger);">INVERTIDO</span>
         </div>
       </div>
 
       <div id="canvas-container">
         <canvas id="game-canvas"></canvas>
+      </div>
+
+      <div id="spectator-bar">
+        <span id="spectator-status" class="spectator-label">Operador eliminado — observando desfecho da arena</span>
+        <div class="spectator-actions">
+          <button id="btn-spectator-restart" class="btn btn-primary" style="padding: 5px 12px; font-size: 0.78rem;">Reiniciar Rodada (R)</button>
+          <button id="btn-spectator-lobby" class="btn btn-secondary" style="padding: 5px 12px; font-size: 0.78rem;">Menu Principal</button>
+        </div>
+      </div>
+
+      <div class="controls-footer">
+        <span>MOVIMENTO: WASD / SETAS</span>
+        <span>BOMBA: ESPAÇO / J</span>
+        <span>REINICIAR: R (AO SER ELIMINADO)</span>
       </div>
 
       <!-- Clean Technical Touch Controls -->
@@ -761,6 +864,7 @@
       <span class="modal-tag">Resultado Oficial</span>
       <div id="modal-title" class="modal-title">Partida Encerrada</div>
       <div id="modal-winner" class="modal-winner">Resultado verificado pelo sistema.</div>
+      <div id="modal-stats" class="modal-stats">ABATES: 0 • ARENA: RUÍNAS</div>
       <div class="modal-actions">
         <button id="btn-play-again" class="btn btn-primary">Iniciar Nova Rodada</button>
         <button id="btn-back-lobby" class="btn btn-secondary">Retornar ao Menu</button>

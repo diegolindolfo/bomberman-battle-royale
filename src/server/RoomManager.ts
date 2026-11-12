@@ -44,19 +44,20 @@ export class RoomManager {
   public createRoom(
     socket: Socket,
     playerName: string,
-    arena: ArenaTheme = 'classic',
+    arena: ArenaTheme = 'ruins',
     maxPlayers: number = 4,
-    fillWithBots: boolean = true
+    fillWithBots: boolean = true,
+    autoStart: boolean = false
   ): Room {
     this.leaveRoom(socket);
 
     const roomId = 'BOMB-' + Math.floor(1000 + Math.random() * 9000);
     const state = new GameState(arena);
-    const player = state.addPlayer(socket.id, playerName || 'Player 1', false);
+    const player = state.addPlayer(socket.id, playerName || 'Operador_01', false);
 
     const room: Room = {
       id: roomId,
-      name: `Sala de ${playerName || 'Jogador'}`,
+      name: `Sala de ${playerName || 'Operador'}`,
       hostSocketId: socket.id,
       arena,
       maxPlayers,
@@ -80,7 +81,12 @@ export class RoomManager {
       arena
     });
 
-    this.broadcastRoomsList();
+    if (autoStart) {
+      this.startGame(socket);
+    } else {
+      this.broadcastRoomsList();
+    }
+
     return room;
   }
 
@@ -184,7 +190,11 @@ export class RoomManager {
 
     if (arena) {
       room.arena = arena;
-      room.state.arena = arena;
+      room.state.setArena(arena);
+    }
+
+    for (const ai of room.bots.values()) {
+      ai.reset();
     }
 
     room.state.initGrid();

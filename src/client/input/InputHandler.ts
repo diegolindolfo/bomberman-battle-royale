@@ -6,20 +6,50 @@ export class InputHandler {
   private touchDx: number = 0;
   private touchDy: number = 0;
   private touchBomb: boolean = false;
+  private onRestartShortcut?: () => void;
 
-  constructor() {
+  constructor(onRestartShortcut?: () => void) {
+    this.onRestartShortcut = onRestartShortcut;
+
     window.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement | null;
+      const isTextInput =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+
+      if (isTextInput || e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+
       this.keys[e.code] = true;
-      if (e.code === 'Space' || e.key === ' ') {
+      if (e.code === 'Space' || e.key === ' ' || e.code === 'KeyJ') {
         this.bombPressed = true;
+      }
+      if (e.code === 'KeyR' && !e.repeat && this.onRestartShortcut) {
+        this.onRestartShortcut();
       }
     });
 
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
+    });
+
+    const resetAll = () => {
+      this.keys = {};
+      this.bombPressed = false;
+      this.touchDx = 0;
+      this.touchDy = 0;
+      this.touchBomb = false;
+    };
+
+    window.addEventListener('blur', resetAll);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) resetAll();
     });
 
     this.bindTouchControls();
@@ -31,8 +61,10 @@ export class InputHandler {
       if (!el) return;
       el.addEventListener('touchstart', (e) => { e.preventDefault(); onDown(); });
       el.addEventListener('touchend', (e) => { e.preventDefault(); onUp(); });
+      el.addEventListener('touchcancel', () => { onUp(); });
       el.addEventListener('mousedown', (e) => { e.preventDefault(); onDown(); });
       el.addEventListener('mouseup', (e) => { e.preventDefault(); onUp(); });
+      el.addEventListener('mouseleave', () => { onUp(); });
     };
 
     bindBtn('btn-up', () => { this.touchDy = -1; }, () => { this.touchDy = 0; });

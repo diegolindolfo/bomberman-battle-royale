@@ -52,6 +52,8 @@ export interface PlayerState {
   y: number;
   vx: number;         // current velocity
   vy: number;
+  desiredDx: number;  // normalized input axis X (-1, 0, 1)
+  desiredDy: number;  // normalized input axis Y (-1, 0, 1)
   facing: Direction;
   isMoving: boolean;
   alive: boolean;
@@ -69,10 +71,13 @@ export interface Bomb {
   ownerId: string;
   gx: number;         // grid coordinate X
   gy: number;         // grid coordinate Y
+  x: number;          // world pixel X for smooth sliding
+  y: number;          // world pixel Y for smooth sliding
   fuseTimer: number;  // seconds until blast
   fireRange: number;
   slidingVx: number;  // sliding speed when kicked
   slidingVy: number;
+  isConveyorSliding?: boolean; // stops once off conveyor if not kicked
   overlapPlayers: string[]; // One-way passability: players inside can walk out
 }
 
@@ -96,6 +101,7 @@ export interface ExplosionCell {
 
 export interface Explosion {
   id: string;
+  ownerId?: string;
   cells: ExplosionCell[];
   duration: number; // seconds remaining
 }
