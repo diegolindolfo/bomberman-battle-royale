@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.gemini
+.local
+.npm
+.bash_logout
+.bashrc
+.gitconfig
+.profile
