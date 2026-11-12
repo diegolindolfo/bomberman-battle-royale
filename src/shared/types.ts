@@ -144,6 +144,7 @@ export interface GameSnapshot {
   breakingBlocks: BlockBreakAnimation[];
   winner: PlayerState | null;
   hitstopTimer: number; // frame freeze duration in seconds
+  suddenDeathDropCount: number; // progressive block drop counter for accelerating collapse
 }
 
 export interface RoomSummary {

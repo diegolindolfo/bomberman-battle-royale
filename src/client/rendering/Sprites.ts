@@ -763,4 +763,54 @@ export class Sprites {
       ctx.fill();
     }
   }
+
+  // Draw celebratory victory avatar for end-of-game winner spotlight
+  public static drawVictoryAvatar(canvas: HTMLCanvasElement, colorHex: string): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    let row = 0;
+    const c = colorHex.toLowerCase();
+    if (c.includes('ef4444') || c.includes('red')) row = 0;
+    else if (c.includes('3b82f6') || c.includes('blue')) row = 1;
+    else if (c.includes('10b981') || c.includes('green')) row = 2;
+    else if (c.includes('f59e0b') || c.includes('yellow')) row = 3;
+    else if (c.includes('8b5cf6') || c.includes('purple')) row = 4;
+    else row = 5;
+
+    // Golden victory base halo
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h - 8, w * 0.40, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dark ground shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h - 8, w * 0.32, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
+      const img = this.charactersImg;
+      const colWidth = img.naturalWidth / 9;
+      const rowHeight = img.naturalHeight / 6;
+
+      // Col 8 is victory frame (hands raised in celebration)
+      const targetH = Math.round(h - 10);
+      const targetW = Math.round(targetH * (2 / 3));
+      const dx = Math.round((w - targetW) / 2);
+      const dy = Math.round((h - targetH) / 2 - 3);
+
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 8 * colWidth, row * rowHeight, colWidth, rowHeight, dx, dy, targetW, targetH);
+    } else {
+      ctx.fillStyle = colorHex;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 4, 18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }

@@ -541,6 +541,60 @@
       font-weight: 600;
     }
 
+    /* Minimalist Operator Status Roster Strip */
+    .hud-roster {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 4px;
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+
+    .roster-card {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--player-color, var(--border-subtle));
+      position: relative;
+      transition: opacity 0.25s ease, border-color 0.25s ease, filter 0.25s ease;
+    }
+
+    .roster-card.is-alive {
+      opacity: 1;
+    }
+
+    .roster-card.is-dead {
+      opacity: 0.38;
+      filter: grayscale(0.85);
+      border-color: #333338 !important;
+      background-color: #0c0c0e;
+    }
+
+    .roster-card.is-me::after {
+      content: '';
+      position: absolute;
+      bottom: -3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background-color: var(--accent);
+    }
+
+    .roster-svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
     .hud-timer-badge {
       font-size: 0.88rem;
       font-weight: 700;
@@ -805,6 +859,48 @@
       color: var(--text-main);
       margin-bottom: 12px;
       line-height: 1.5;
+    }
+
+    .modal-winner-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin: 10px 0 16px;
+      text-align: left;
+    }
+
+    .modal-winner-card canvas {
+      width: 60px;
+      height: 60px;
+      aspect-ratio: 1 / 1;
+      display: block;
+      image-rendering: pixelated;
+      flex-shrink: 0;
+    }
+
+    .modal-winner-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .modal-winner-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .modal-winner-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text-main);
     }
 
     .modal-stats {
@@ -1309,12 +1405,13 @@
     <div id="screen-game" class="screen">
       <div id="hud">
         <div class="hud-metric">
+          <div id="hud-roster" class="hud-roster" title="Status dos Operadores"></div>
           <span class="hud-metric-label">ATIVOS:</span>
           <span class="hud-metric-value" id="hud-alive-count">4 / 4</span>
           <span class="hud-metric-label" style="margin-left: 6px;">ARENA:</span>
           <span class="hud-metric-value" id="hud-arena">RUÍNAS</span>
         </div>
-        <div class="hud-timer-badge" id="hud-timer">02:30</div>
+        <div class="hud-timer-badge" id="hud-timer">01:00</div>
         <div class="hud-telemetry">
           <span id="hud-bombs">BOMBAS: 1</span>
           <span id="hud-fire">RAIO: 2</span>
@@ -1393,6 +1490,13 @@
       <span class="modal-tag">Resultado Oficial</span>
       <div id="modal-title" class="modal-title">Partida Encerrada</div>
       <div id="modal-winner" class="modal-winner">Resultado verificado pelo sistema.</div>
+      <div id="modal-winner-card" class="modal-winner-card" style="display: none;">
+        <canvas id="modal-winner-canvas" width="60" height="60"></canvas>
+        <div class="modal-winner-info">
+          <span class="modal-winner-badge">SOBREVIVENTE CAMPEÃO</span>
+          <div id="modal-winner-name" class="modal-winner-name">Operador</div>
+        </div>
+      </div>
       <div id="modal-stats" class="modal-stats">ABATES: 0 • ARENA: RUÍNAS</div>
       <div class="modal-actions">
         <button id="btn-play-again" class="btn btn-primary">Iniciar Nova Rodada</button>

@@ -32,6 +32,7 @@ class BombermanApp {
   private seenExplosionIds: Set<string> = new Set();
   private seenBreakingCoords: Set<string> = new Set();
   private prevSuddenDeath: boolean = false;
+  private prevSuddenDeathDropCount: number = 0;
   private prevMyAlive: boolean = true;
   private prevPowerUps: PlayerPowerUps | null = null;
   private isTouchDevice: boolean = false;
@@ -137,6 +138,7 @@ class BombermanApp {
 
   private returnToLobby(): void {
     this.exitFullscreen();
+    this.soundFx.stopBattleMusic();
     if (this.isLocalMode) {
       this.localState = null;
       this.localBots.clear();
@@ -161,6 +163,8 @@ class BombermanApp {
     this.seenExplosionIds.clear();
     this.seenBreakingCoords.clear();
     this.prevSuddenDeath = false;
+    this.prevSuddenDeathDropCount = 0;
+    this.soundFx.setSuddenDeathMusic(false);
     this.prevMyAlive = true;
     this.prevPowerUps = null;
     document.getElementById('spectator-bar')?.classList.remove('active');
@@ -434,6 +438,7 @@ class BombermanApp {
     }
 
     this.localState.startGame();
+    this.soundFx.startBattleMusic();
     this.showScreen('screen-game');
     (document.activeElement as HTMLElement | null)?.blur();
   }
@@ -479,6 +484,7 @@ class BombermanApp {
 
     this.socket.on('game_started', () => {
       this.resetMatchTrackers();
+      this.soundFx.startBattleMusic();
       this.showScreen('screen-game');
       (document.activeElement as HTMLElement | null)?.blur();
     });
@@ -561,11 +567,19 @@ class BombermanApp {
     }
     this.seenBreakingCoords = currentBreakingCoords;
 
-    // 4. Sudden death activation siren
+    // 4. Sudden death activation siren & progressive block drop audio
     if (snapshot.suddenDeathActive && !this.prevSuddenDeath) {
       this.soundFx.playSuddenDeathAlert();
     }
     this.prevSuddenDeath = snapshot.suddenDeathActive;
+
+    if (snapshot.suddenDeathActive && snapshot.suddenDeathDropCount > this.prevSuddenDeathDropCount) {
+      const progress = Math.min(1, snapshot.suddenDeathDropCount / 40);
+      this.soundFx.playSuddenDeathBlockDrop(progress);
+      this.renderer.particles.triggerScreenShake(0.35 + progress * 0.35);
+    }
+    this.prevSuddenDeathDropCount = snapshot.suddenDeathDropCount;
+    this.soundFx.setSuddenDeathMusic(snapshot.suddenDeathActive);
 
     // 5. Local player elimination + power-up pickup chime
     const myPlayer = snapshot.players.find(p => p.id === this.myPlayerId);
@@ -596,6 +610,37 @@ class BombermanApp {
     const alivePlayers = snapshot.players.filter(p => p.alive);
     const aliveEl = document.getElementById('hud-alive-count');
     if (aliveEl) aliveEl.textContent = `${alivePlayers.length} / ${snapshot.players.length}`;
+
+    // Update compact status strip (robot faces: alive vs sleeping / closed eyes)
+    const rosterContainer = document.getElementById('hud-roster');
+    if (rosterContainer) {
+      rosterContainer.innerHTML = '';
+      snapshot.players.forEach(p => {
+        const card = document.createElement('div');
+        card.className = `roster-card ${p.alive ? 'is-alive' : 'is-dead'}${p.id === this.myPlayerId ? ' is-me' : ''}`;
+        card.style.setProperty('--player-color', p.color);
+        card.title = `${p.name} (${p.alive ? 'Ativo' : 'Eliminado'})`;
+
+        if (p.alive) {
+          card.innerHTML = `
+            <svg class="roster-svg" viewBox="0 0 16 16">
+              <rect x="2" y="2" width="12" height="12" rx="2" fill="${p.color}" />
+              <rect x="4" y="5" width="8" height="5" rx="1" fill="#0A0A0B" />
+              <rect x="5.5" y="6.5" width="1.8" height="2" fill="#F4F4F5" />
+              <rect x="8.7" y="6.5" width="1.8" height="2" fill="#F4F4F5" />
+            </svg>`;
+        } else {
+          card.innerHTML = `
+            <svg class="roster-svg" viewBox="0 0 16 16">
+              <rect x="2" y="2" width="12" height="12" rx="2" fill="#333338" />
+              <rect x="4" y="5" width="8" height="5" rx="1" fill="#0A0A0B" />
+              <line x1="5.2" y1="7.5" x2="7.4" y2="7.5" stroke="#8E8E93" stroke-width="1.2" stroke-linecap="round" />
+              <line x1="8.6" y1="7.5" x2="10.8" y2="7.5" stroke="#8E8E93" stroke-width="1.2" stroke-linecap="round" />
+            </svg>`;
+        }
+        rosterContainer.appendChild(card);
+      });
+    }
 
     const arenaEl = document.getElementById('hud-arena');
     if (arenaEl) arenaEl.textContent = this.getArenaShortLabel(snapshot.arena);
@@ -676,9 +721,14 @@ class BombermanApp {
     if (!modal || modal.classList.contains('active')) return;
 
     modal.classList.add('active');
+    this.soundFx.stopBattleMusic();
+
     const titleEl = document.getElementById('modal-title');
     const winnerEl = document.getElementById('modal-winner');
     const statsEl = document.getElementById('modal-stats');
+    const winnerCard = document.getElementById('modal-winner-card');
+    const winnerCanvas = document.getElementById('modal-winner-canvas') as HTMLCanvasElement | null;
+    const winnerNameEl = document.getElementById('modal-winner-name');
     const playAgainBtn = document.getElementById('btn-play-again') as HTMLButtonElement | null;
 
     if (playAgainBtn) {
@@ -688,6 +738,16 @@ class BombermanApp {
     const winner = snapshot.winner;
     const isMeWinner = winner && winner.id === this.myPlayerId;
     const me = snapshot.players.find(p => p.id === this.myPlayerId);
+
+    if (winner) {
+      if (winnerCard) winnerCard.style.display = 'flex';
+      if (winnerNameEl) winnerNameEl.textContent = `${winner.name} (${winner.kills} abate${winner.kills === 1 ? '' : 's'})`;
+      if (winnerCanvas) {
+        Sprites.drawVictoryAvatar(winnerCanvas, winner.color);
+      }
+    } else {
+      if (winnerCard) winnerCard.style.display = 'none';
+    }
 
     if (isMeWinner) {
       this.soundFx.playVictory();
@@ -778,6 +838,7 @@ class BombermanApp {
           this.processSnapshot(this.localState.getSnapshot());
         } else if (this.localState.phase === 'game_over') {
           // Keep winner celebration animation & hitstop timer visually responsive
+          this.localState.update(dt);
           this.lastSnapshot = this.localState.getSnapshot();
         }
       } else if (!this.isLocalMode && this.lastSnapshot?.phase === 'playing') {
@@ -793,5 +854,5 @@ class BombermanApp {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  new BombermanApp();
+  (window as any).__app = new BombermanApp();
 });

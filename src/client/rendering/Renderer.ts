@@ -8,6 +8,9 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   public particles: ParticleSystem;
   private animTime: number = 0;
+  private zoomFactor: number = 1.0;
+  private cameraX: number = MAP_WIDTH / 2;
+  private cameraY: number = MAP_HEIGHT / 2;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -45,6 +48,25 @@ export class Renderer {
       return;
     }
 
+    // Dynamic Camera Zoom: smoothly frame and spotlight winner during game over
+    const isGameOver = snapshot.phase === 'game_over';
+    const winner = snapshot.winner;
+    let targetZoom = 1.0;
+    let targetX = MAP_WIDTH / 2;
+    let targetY = MAP_HEIGHT / 2;
+
+    if (isGameOver && winner) {
+      targetZoom = 2.35;
+      targetX = Math.max(110, Math.min(MAP_WIDTH - 110, winner.x));
+      targetY = Math.max(90, Math.min(MAP_HEIGHT - 90, winner.y));
+      this.particles.emitVictorySparkles(winner.x, winner.y, winner.color);
+    }
+
+    const lerpSpeed = isGameOver ? 2.8 : 4.5;
+    this.zoomFactor += (targetZoom - this.zoomFactor) * Math.min(1, dt * lerpSpeed);
+    this.cameraX += (targetX - this.cameraX) * Math.min(1, dt * lerpSpeed);
+    this.cameraY += (targetY - this.cameraY) * Math.min(1, dt * lerpSpeed);
+
     // Trigger proportional screen shake based on number of active explosions
     if (snapshot.explosions.length > 0) {
       this.particles.triggerScreenShake(Math.min(18, 4 * snapshot.explosions.length));
@@ -52,11 +74,28 @@ export class Renderer {
 
     ctx.save();
 
+    // Apply Camera Zoom & Centering
+    if (this.zoomFactor > 1.002) {
+      ctx.translate(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+      ctx.scale(this.zoomFactor, this.zoomFactor);
+      ctx.translate(-this.cameraX, -this.cameraY);
+    }
+
     // Screen Shake effect
     if (this.particles.screenShake > 0) {
       const shakeX = (Math.random() - 0.5) * this.particles.screenShake;
       const shakeY = (Math.random() - 0.5) * this.particles.screenShake;
       ctx.translate(shakeX, shakeY);
+    }
+
+    // Winner spotlight halo on ground
+    if (isGameOver && winner && this.zoomFactor > 1.25) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+      ctx.beginPath();
+      ctx.ellipse(winner.x, winner.y + 13, 36, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     // 1. Draw Grid Tiles & Arena Grounds

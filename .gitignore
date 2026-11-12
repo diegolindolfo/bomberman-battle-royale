@@ -10,3 +10,5 @@ dist/
 .gitconfig
 .profile
 diegolindolfo/
+.cache/
+.config/

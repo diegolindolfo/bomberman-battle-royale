@@ -64,6 +64,25 @@ export class ParticleSystem {
     }
   }
 
+  public emitVictorySparkles(x: number, y: number, color: string): void {
+    const colors = [color, '#f59e0b', '#10b981', '#ffffff', '#38bdf8'];
+    for (let i = 0; i < 2; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
+      const speed = 40 + Math.random() * 80;
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 26,
+        y: y - 24 + (Math.random() - 0.5) * 16,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 2.5 + Math.random() * 3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: 1,
+        maxLife: 0.6 + Math.random() * 0.4,
+        life: 0.6 + Math.random() * 0.4
+      });
+    }
+  }
+
   public update(dt: number): void {
     if (this.screenShake > 0) {
       this.screenShake = Math.max(0, this.screenShake - dt * 25);

@@ -530,7 +530,9 @@ export class GameState {
 
     if (this.suddenDeathActive) {
       this.suddenDeathTimer += dt;
-      if (this.suddenDeathTimer >= SUDDEN_DEATH_DROP_INTERVAL) {
+      // Exponential collapse acceleration: drops start at 0.85s and accelerate smoothly down to 0.18s
+      const currentInterval = Math.max(0.18, SUDDEN_DEATH_DROP_INTERVAL * Math.pow(0.972, this.suddenDeathIndex));
+      if (this.suddenDeathTimer >= currentInterval) {
         this.suddenDeathTimer = 0;
         this.dropNextSuddenDeathBlock();
       }
@@ -1283,7 +1285,8 @@ export class GameState {
       powerUps: this.powerUps,
       breakingBlocks: this.breakingBlocks,
       winner: this.winner,
-      hitstopTimer: this.hitstopTimer
+      hitstopTimer: this.hitstopTimer,
+      suddenDeathDropCount: this.suddenDeathIndex
     };
   }
 }
