@@ -2,7 +2,11 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0A0A0B">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Bomberman Royale - Simulação Web em Tempo Real</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,6 +31,12 @@
       margin: 0;
       padding: 0;
       user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      touch-action: manipulation;
     }
 
     body {
@@ -36,6 +46,7 @@
       font-size: 14px;
       line-height: 1.5;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -120,6 +131,7 @@
       display: none;
       width: 100%;
       flex-direction: column;
+      align-items: center;
     }
 
     .screen.active {
@@ -392,20 +404,20 @@
       border: 1px solid var(--border-subtle);
       border-bottom: none;
       border-radius: var(--radius) var(--radius) 0 0;
-      padding: 10px 16px;
+      padding: 8px 14px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
     }
 
     .hud-metric {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .hud-metric-label {
       color: var(--text-muted);
-      font-size: 0.72rem;
+      font-size: 0.7rem;
     }
 
     .hud-metric-value {
@@ -414,7 +426,7 @@
     }
 
     .hud-timer-badge {
-      font-size: 0.92rem;
+      font-size: 0.88rem;
       font-weight: 700;
       color: var(--text-main);
       padding: 2px 8px;
@@ -430,10 +442,58 @@
 
     .hud-telemetry {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       color: var(--text-muted);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       flex-wrap: wrap;
+    }
+
+    .hud-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .hud-btn {
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      line-height: 1.2;
+      white-space: nowrap;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .hud-btn:hover {
+      background-color: var(--bg-surface-hover);
+      border-color: var(--border-active);
+    }
+
+    .hud-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .hud-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+      flex-shrink: 0;
+    }
+
+    .hud-only-compact {
+      display: none;
     }
 
     /* Canvas Frame */
@@ -441,7 +501,10 @@
       position: relative;
       width: 100%;
       max-width: 720px;
+      aspect-ratio: 720 / 624;
+      container-type: size;
       display: flex;
+      align-items: center;
       justify-content: center;
       background-color: #000000;
       border: 1px solid var(--border-subtle);
@@ -449,8 +512,8 @@
     }
 
     canvas {
-      width: 100%;
-      height: auto;
+      width: min(100cqw, calc(100cqh * 720 / 624));
+      height: min(100cqh, calc(100cqw * 624 / 720));
       aspect-ratio: 720 / 624;
       display: block;
       image-rendering: pixelated;
@@ -464,10 +527,10 @@
       background-color: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-top: none;
-      padding: 10px 16px;
+      padding: 8px 14px;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
@@ -477,7 +540,7 @@
 
     .spectator-label {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
     }
 
@@ -511,15 +574,18 @@
       max-width: 720px;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 0;
-      margin-top: 12px;
+      padding: 12px 18px;
+      margin-top: 4px;
+      touch-action: none;
+      flex-shrink: 0;
     }
 
     .dpad {
       display: grid;
-      grid-template-columns: repeat(3, 48px);
-      grid-template-rows: repeat(3, 48px);
+      grid-template-columns: repeat(3, 52px);
+      grid-template-rows: repeat(3, 52px);
       gap: 4px;
+      touch-action: none;
     }
 
     .touch-btn {
@@ -530,25 +596,28 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      touch-action: manipulation;
+      touch-action: none;
+      transition: background-color 0.06s ease, border-color 0.06s ease, color 0.06s ease;
     }
 
-    .touch-btn:active {
+    .touch-btn:active,
+    .touch-btn.active {
       background-color: var(--bg-surface-hover);
-      border-color: var(--border-active);
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .touch-btn svg {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       stroke: currentColor;
       stroke-width: 1.5;
       fill: none;
     }
 
     .bomb-action-btn {
-      width: 80px;
-      height: 80px;
+      width: 88px;
+      height: 88px;
       border-radius: var(--radius);
       background-color: var(--bg-surface);
       border: 1px solid var(--border-active);
@@ -558,9 +627,11 @@
       letter-spacing: 0.05em;
     }
 
-    .bomb-action-btn:active {
+    .bomb-action-btn:active,
+    .bomb-action-btn.active {
       border-color: var(--danger);
       color: var(--danger);
+      background-color: var(--bg-surface-hover);
     }
 
     /* Modal */
@@ -574,7 +645,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 100;
+      z-index: 200;
     }
 
     .modal-overlay.active {
@@ -634,21 +705,265 @@
       display: flex;
       gap: 10px;
       justify-content: center;
+      flex-wrap: wrap;
     }
 
+    /* Fullscreen Mode (desktop & mobile) */
+    body.is-fullscreen {
+      overflow: hidden;
+      height: 100dvh;
+      overscroll-behavior: none;
+    }
+
+    body.is-fullscreen header {
+      display: none;
+    }
+
+    body.is-fullscreen main {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      max-width: none;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background-color: var(--bg-main);
+      z-index: 80;
+      overflow: hidden;
+    }
+
+    body.is-fullscreen #screen-game.active {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    body.is-fullscreen #hud,
+    body.is-fullscreen #spectator-bar,
+    body.is-fullscreen .controls-footer {
+      max-width: none;
+      width: 100%;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+    }
+
+    body.is-fullscreen #hud {
+      border-top: none;
+      flex-shrink: 0;
+    }
+
+    body.is-fullscreen .hud-only-compact {
+      display: inline-flex;
+    }
+
+    body.is-fullscreen #canvas-container {
+      flex: 1 1 0;
+      min-height: 0;
+      width: 100%;
+      max-width: none;
+      aspect-ratio: auto;
+      border-left: none;
+      border-right: none;
+    }
+
+    body.is-fullscreen .controls-footer {
+      flex-shrink: 0;
+    }
+
+    /* Show touch controls on coarse pointers or touch-enabled viewports <= 1024px */
     @media (hover: none) and (pointer: coarse) {
       #touch-controls {
         display: flex;
       }
+      .controls-footer {
+        display: none;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      body.has-touch #touch-controls {
+        display: flex;
+      }
+      body.has-touch .controls-footer {
+        display: none;
+      }
+    }
+
+    /* Automatic Edge-to-Edge Full-Viewport Gameplay on Mobile Devices */
+    @media (max-width: 920px), (hover: none) and (pointer: coarse) {
+      body.in-game {
+        overflow: hidden;
+        height: 100dvh;
+        overscroll-behavior: none;
+      }
+
+      body.in-game header {
+        display: none;
+      }
+
+      body.in-game main {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100dvh;
+        max-width: none;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        background-color: var(--bg-main);
+        z-index: 80;
+        overflow: hidden;
+      }
+
+      body.in-game #screen-game.active {
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        overflow: hidden;
+      }
+
+      body.in-game #hud {
+        max-width: none;
+        width: 100%;
+        border-radius: 0;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        padding: 6px 10px;
+        gap: 4px 8px;
+        flex-shrink: 0;
+      }
+
+      body.in-game .hud-only-compact {
+        display: inline-flex;
+      }
+
+      body.in-game #canvas-container {
+        flex: 1 1 0;
+        min-height: 0;
+        width: 100%;
+        max-width: none;
+        aspect-ratio: auto;
+        border-left: none;
+        border-right: none;
+      }
+
+      body.in-game #spectator-bar {
+        max-width: none;
+        width: 100%;
+        border-left: none;
+        border-right: none;
+        padding: 6px 10px;
+      }
+
+      body.in-game #touch-controls {
+        max-width: none;
+        width: 100%;
+        margin-top: 0;
+        padding: 10px 18px 14px;
+        border-top: 1px solid var(--border-subtle);
+        background-color: var(--bg-main);
+      }
     }
 
     @media (max-width: 680px) {
+      .header-inner {
+        padding: 10px 14px;
+      }
       .arena-row {
         grid-template-columns: 80px 1fr;
         gap: 6px;
       }
       .arena-mechanic, .arena-status {
         grid-column: span 2;
+      }
+      body.in-game #hud,
+      body.is-fullscreen #hud {
+        font-size: 0.72rem;
+        padding: 5px 10px;
+        gap: 5px 6px;
+      }
+      body.in-game .hud-metric-label,
+      body.is-fullscreen .hud-metric-label {
+        display: none;
+      }
+      body.in-game .hud-metric,
+      body.is-fullscreen .hud-metric {
+        gap: 8px;
+      }
+      body.in-game .hud-timer-badge,
+      body.is-fullscreen .hud-timer-badge {
+        font-size: 0.78rem;
+        padding: 2px 6px;
+      }
+      body.in-game .hud-btn,
+      body.is-fullscreen .hud-btn {
+        padding: 4px 6px;
+      }
+      body.in-game .hud-telemetry,
+      body.is-fullscreen .hud-telemetry {
+        order: 4;
+        width: 100%;
+        justify-content: center;
+        font-size: 0.68rem;
+        gap: 10px;
+        padding-top: 4px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      body.in-game .hud-btn-label {
+        display: none;
+      }
+    }
+
+    /* Mobile Landscape: maximize vertical arena and dock thumbs smoothly on side margins */
+    @media (orientation: landscape) and (max-height: 540px) {
+      body.in-game #hud,
+      body.is-fullscreen #hud {
+        flex-wrap: nowrap;
+        padding: 4px 12px;
+        font-size: 0.72rem;
+      }
+      body.in-game .hud-telemetry,
+      body.is-fullscreen .hud-telemetry {
+        order: initial;
+        width: auto;
+        border-top: none;
+        padding-top: 0;
+        font-size: 0.7rem;
+        gap: 8px;
+      }
+      body.in-game #touch-controls,
+      body.is-fullscreen #touch-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        z-index: 85;
+        padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+        border-top: none;
+        background-color: transparent;
+        pointer-events: none;
+      }
+      body.in-game #touch-controls .dpad,
+      body.in-game #touch-controls #btn-bomb,
+      body.is-fullscreen #touch-controls .dpad,
+      body.is-fullscreen #touch-controls #btn-bomb {
+        pointer-events: auto;
+      }
+      .dpad {
+        grid-template-columns: repeat(3, 46px);
+        grid-template-rows: repeat(3, 46px);
+        gap: 3px;
+      }
+      .bomb-action-btn {
+        width: 78px;
+        height: 78px;
+        font-size: 0.78rem;
       }
     }
   </style>
@@ -797,7 +1112,7 @@
         <div class="hud-metric">
           <span class="hud-metric-label">ATIVOS:</span>
           <span class="hud-metric-value" id="hud-alive-count">4 / 4</span>
-          <span class="hud-metric-label" style="margin-left: 8px;">ARENA:</span>
+          <span class="hud-metric-label" style="margin-left: 6px;">ARENA:</span>
           <span class="hud-metric-value" id="hud-arena">RUÍNAS</span>
         </div>
         <div class="hud-timer-badge" id="hud-timer">02:30</div>
@@ -809,6 +1124,21 @@
           <span id="hud-shield" style="display:none; color: var(--accent);">ESCUDO</span>
           <span id="hud-kick" style="display:none; color: var(--accent);">CHUTE</span>
           <span id="hud-curse" style="display:none; color: var(--danger);">INVERTIDO</span>
+        </div>
+        <div class="hud-actions">
+          <button id="btn-hud-sound" class="hud-btn hud-only-compact" type="button" aria-label="Alternar áudio" title="Áudio">
+            <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+            <span class="hud-btn-label" id="hud-sound-label">Som</span>
+          </button>
+          <button id="btn-fullscreen" class="hud-btn" type="button" aria-label="Alternar tela cheia" title="Tela Cheia">
+            <svg id="fullscreen-icon-enter" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            <svg id="fullscreen-icon-exit" viewBox="0 0 24 24" style="display:none;"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            <span class="hud-btn-label" id="fullscreen-label">Tela Cheia</span>
+          </button>
+          <button id="btn-hud-menu" class="hud-btn hud-only-compact" type="button" aria-label="Voltar ao menu" title="Menu">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <span class="hud-btn-label">Menu</span>
+          </button>
         </div>
       </div>
 

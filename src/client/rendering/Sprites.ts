@@ -636,7 +636,7 @@ export class Sprites {
       else if (color.includes('8b5cf6') || color.includes('purple')) row = 4;
       else row = 5;
 
-      // Cols: 0=front_idle, 1=front_w1, 2=front_w2, 3=side_w1, 4=side_w2, 5=back_idle, 6=back_w1, 7=back_w2, 8=victory
+      // Cols: 0=front_idle, 1=front_w1, 2=front_w2, 3=side_idle, 4=side_w1, 5=back_idle, 6=back_w1, 7=back_w2, 8=victory
       let col = 0;
       const step = Math.floor(animTime * 9) % 4;
       if (isWinner) {
@@ -646,7 +646,7 @@ export class Sprites {
       } else if (facing === 'up') {
         col = !isMoving ? 5 : (step === 0 ? 6 : step === 2 ? 7 : 5);
       } else {
-        col = !isMoving ? 3 : (Math.floor(animTime * 8) % 2 === 0 ? 3 : 4);
+        col = !isMoving ? 3 : (Math.floor(animTime * 9) % 2 === 0 ? 4 : 3);
       }
 
       const flip = !isWinner && facing === 'left';

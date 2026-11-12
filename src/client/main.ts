@@ -32,12 +32,22 @@ class BombermanApp {
   private prevSuddenDeath: boolean = false;
   private prevMyAlive: boolean = true;
   private prevPowerUps: PlayerPowerUps | null = null;
+  private isTouchDevice: boolean = false;
+  private hadNativeFullscreen: boolean = false;
 
   constructor() {
     this.socket = io({
       timeout: 3000,
       reconnectionAttempts: 2
     });
+
+    this.isTouchDevice =
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (this.isTouchDevice) {
+      document.body.classList.add('has-touch');
+    }
 
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.renderer = new Renderer(canvas);
@@ -48,6 +58,92 @@ class BombermanApp {
     this.bindSocket();
     this.updateConnectionIndicator(false);
     this.startRenderLoop();
+  }
+
+  private isFullscreenActive(): boolean {
+    return Boolean(document.fullscreenElement) || document.body.classList.contains('is-fullscreen');
+  }
+
+  private updateFullscreenButton(active: boolean): void {
+    const btn = document.getElementById('btn-fullscreen');
+    const label = document.getElementById('fullscreen-label');
+    const iconEnter = document.getElementById('fullscreen-icon-enter');
+    const iconExit = document.getElementById('fullscreen-icon-exit');
+    btn?.classList.toggle('active', active);
+    if (label) label.textContent = active ? 'Sair' : 'Tela Cheia';
+    if (iconEnter) iconEnter.style.display = active ? 'none' : 'block';
+    if (iconExit) iconExit.style.display = active ? 'block' : 'none';
+  }
+
+  private enterFullscreen(): void {
+    document.body.classList.add('is-fullscreen');
+    this.updateFullscreenButton(true);
+    const docEl = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+    if (!document.fullscreenElement) {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        try {
+          docEl.webkitRequestFullscreen();
+        } catch {
+          // CSS .is-fullscreen fallback remains active cleanly
+        }
+      }
+    }
+  }
+
+  private exitFullscreen(): void {
+    this.hadNativeFullscreen = false;
+    document.body.classList.remove('is-fullscreen');
+    this.updateFullscreenButton(false);
+    const doc = document as Document & {
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    if (document.fullscreenElement) {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {});
+      } else if (doc.webkitExitFullscreen) {
+        try {
+          doc.webkitExitFullscreen();
+        } catch {}
+      }
+    }
+  }
+
+  private toggleFullscreen(): void {
+    if (this.isFullscreenActive()) {
+      this.exitFullscreen();
+    } else {
+      this.enterFullscreen();
+    }
+  }
+
+  private syncSoundUI(): void {
+    const soundBtn = document.getElementById('btn-sound-toggle');
+    const hudSoundBtn = document.getElementById('btn-hud-sound');
+    const hudSoundLabel = document.getElementById('hud-sound-label');
+    if (soundBtn) {
+      soundBtn.textContent = this.soundFx.enabled ? 'Áudio: Ativo' : 'Áudio: Desativado';
+    }
+    if (hudSoundLabel) {
+      hudSoundLabel.textContent = this.soundFx.enabled ? 'Som' : 'Mudo';
+    }
+    hudSoundBtn?.classList.toggle('active', this.soundFx.enabled);
+  }
+
+  private returnToLobby(): void {
+    this.exitFullscreen();
+    if (this.isLocalMode) {
+      this.localState = null;
+      this.localBots.clear();
+      this.lastSnapshot = null;
+      this.resetMatchTrackers();
+      this.showScreen('screen-lobby');
+    } else {
+      window.location.reload();
+    }
   }
 
   private resetMatchTrackers(): void {
@@ -124,11 +220,33 @@ class BombermanApp {
       this.hideNotice();
     });
 
-    // Sound toggle
-    const soundBtn = document.getElementById('btn-sound-toggle') as HTMLButtonElement;
-    soundBtn.addEventListener('click', () => {
+    // Sound toggles (header + compact HUD)
+    const toggleSound = () => {
       this.soundFx.enabled = !this.soundFx.enabled;
-      soundBtn.textContent = this.soundFx.enabled ? 'Áudio: Ativo' : 'Áudio: Desativado';
+      this.syncSoundUI();
+    };
+    document.getElementById('btn-sound-toggle')?.addEventListener('click', toggleSound);
+    document.getElementById('btn-hud-sound')?.addEventListener('click', toggleSound);
+    this.syncSoundUI();
+
+    // Fullscreen toggle + native listener sync
+    document.getElementById('btn-fullscreen')?.addEventListener('click', () => {
+      this.toggleFullscreen();
+    });
+    document.getElementById('btn-hud-menu')?.addEventListener('click', () => {
+      this.returnToLobby();
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const isNative = Boolean(document.fullscreenElement);
+      if (isNative) {
+        this.hadNativeFullscreen = true;
+        document.body.classList.add('is-fullscreen');
+        this.updateFullscreenButton(true);
+      } else if (this.hadNativeFullscreen) {
+        this.hadNativeFullscreen = false;
+        document.body.classList.remove('is-fullscreen');
+        this.updateFullscreenButton(false);
+      }
     });
 
     // Arena Selection Rows
@@ -152,6 +270,10 @@ class BombermanApp {
     quickPlayBtn.addEventListener('click', () => {
       this.hideNotice();
       const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
+
+      if (this.isTouchDevice) {
+        this.enterFullscreen();
+      }
 
       if (this.isConnectedToServer) {
         this.isLocalMode = false;
@@ -236,7 +358,7 @@ class BombermanApp {
       this.restartCurrentMatch();
     });
     document.getElementById('btn-spectator-lobby')?.addEventListener('click', () => {
-      window.location.reload();
+      this.returnToLobby();
     });
 
     // Modal buttons
@@ -247,7 +369,7 @@ class BombermanApp {
 
     const backLobbyBtn = document.getElementById('btn-back-lobby') as HTMLButtonElement;
     backLobbyBtn.addEventListener('click', () => {
-      window.location.reload();
+      this.returnToLobby();
     });
   }
 
@@ -586,6 +708,11 @@ class BombermanApp {
   private showScreen(screenId: string): void {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId)?.classList.add('active');
+    const inGame = screenId === 'screen-game';
+    document.body.classList.toggle('in-game', inGame);
+    if (!inGame && this.isFullscreenActive()) {
+      this.exitFullscreen();
+    }
   }
 
   private startRenderLoop(): void {

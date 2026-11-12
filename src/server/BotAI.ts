@@ -723,12 +723,24 @@ export class BotAI {
     let dx = 0;
     let dy = 0;
 
-    const threshold = 3;
-
-    if (Math.abs(diffX) > threshold) {
-      dx = diffX > 0 ? 1 : -1;
-    } else if (Math.abs(diffY) > threshold) {
-      dy = diffY > 0 ? 1 : -1;
+    if (Math.abs(diffX) >= Math.abs(diffY)) {
+      if (Math.abs(diffX) > 2) {
+        dx = diffX > 0 ? 1 : -1;
+      }
+      if (Math.abs(diffY) > 1.5 && Math.abs(diffY) <= 12) {
+        dy = Math.max(-0.35, Math.min(0.35, diffY / 16));
+      } else if (Math.abs(diffY) > 12) {
+        dy = diffY > 0 ? 1 : -1;
+      }
+    } else {
+      if (Math.abs(diffY) > 2) {
+        dy = diffY > 0 ? 1 : -1;
+      }
+      if (Math.abs(diffX) > 1.5 && Math.abs(diffX) <= 12) {
+        dx = Math.max(-0.35, Math.min(0.35, diffX / 16));
+      } else if (Math.abs(diffX) > 12) {
+        dx = diffX > 0 ? 1 : -1;
+      }
     }
 
     return { dx, dy, placeBomb };

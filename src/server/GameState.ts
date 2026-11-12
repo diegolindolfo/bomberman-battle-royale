@@ -405,10 +405,15 @@ export class GameState {
     player.desiredDx = dx;
     player.desiredDy = dy;
 
-    if (dx < 0) player.facing = 'left';
-    else if (dx > 0) player.facing = 'right';
-    else if (dy < 0) player.facing = 'up';
-    else if (dy > 0) player.facing = 'down';
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (dx < 0) player.facing = 'left';
+      else if (dx > 0) player.facing = 'right';
+      else if (dy < 0) player.facing = 'up';
+      else if (dy > 0) player.facing = 'down';
+    } else {
+      if (dy < 0) player.facing = 'up';
+      else if (dy > 0) player.facing = 'down';
+    }
 
     // Input buffering for bomb placement
     if (input.placeBomb) {
