@@ -122,17 +122,24 @@ export class Sprites {
   }
 
   private static drawSoftBlock(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
+    const pad = 3;
+    const size = TILE_SIZE - pad * 2; // 42x42 crate nested inside 48x48 floor cell
+
+    // Subtle ground drop shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.fillRect(x + pad + 1, y + pad + 2, size, size);
+
     const key = this.getSoftBlockKey(arena);
     const blockImg = this.tileImages[key];
     if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
-      ctx.drawImage(blockImg, x, y, TILE_SIZE, TILE_SIZE);
+      ctx.drawImage(blockImg, x + pad, y + pad, size, size);
       return;
     }
 
     ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#9a3412'
                   : (arena === 'cryo' || arena === 'cyber') ? '#38bdf8'
                   : '#b45309';
-    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    ctx.fillRect(x + pad, y + pad, size, size);
   }
 
   private static drawIceFloor(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
@@ -163,18 +170,26 @@ export class Sprites {
 
   private static drawVolatileBlock(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
     const tntImg = this.tileImages['magma_tnt'];
+    const size = TILE_SIZE - 12; // 36x36 barrel prop grounded neatly inside tile
+
+    // Ground shadow under TNT barrel
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(x + TILE_SIZE / 2, y + TILE_SIZE - 7, size * 0.42, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     if (tntImg && tntImg.complete && tntImg.naturalWidth > 0) {
       const pulse = 1 + 0.04 * Math.sin(animTime * 7);
       ctx.save();
       ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2);
       ctx.scale(pulse, pulse);
-      ctx.drawImage(tntImg, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+      ctx.drawImage(tntImg, -size / 2, -size / 2, size, size);
       ctx.restore();
       return;
     }
 
     ctx.fillStyle = '#dc2626';
-    ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    ctx.fillRect(x + 6, y + 6, size, size);
   }
 
   private static drawConveyor(
@@ -296,15 +311,18 @@ export class Sprites {
     ctx.globalAlpha = alpha;
 
     const offset = progress * 9;
-    const half = TILE_SIZE / 2;
+    const pad = 3;
+    const half = (TILE_SIZE - pad * 2) / 2;
+    const baseX = x + pad;
+    const baseY = y + pad;
 
     const blockImg = this.tileImages[this.getSoftBlockKey(arena)];
 
     const quarters = [
-      { sx: 0, sy: 0, dx: x - offset, dy: y - offset },
-      { sx: half, sy: 0, dx: x + half + offset, dy: y - offset },
-      { sx: 0, sy: half, dx: x - offset, dy: y + half + offset },
-      { sx: half, sy: half, dx: x + half + offset, dy: y + half + offset }
+      { sx: 0, sy: 0, dx: baseX - offset, dy: baseY - offset },
+      { sx: 1, sy: 0, dx: baseX + half + offset, dy: baseY - offset },
+      { sx: 0, sy: 1, dx: baseX - offset, dy: baseY + half + offset },
+      { sx: 1, sy: 1, dx: baseX + half + offset, dy: baseY + half + offset }
     ];
 
     for (const q of quarters) {
@@ -325,7 +343,7 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw Bomb at smooth world coordinates with accelerated telegraph pulse (<0.8s)
+  // Draw Bomb at smooth world coordinates with balanced proportions & <0.8s telegraph pulse
   public static drawBomb(
     ctx: CanvasRenderingContext2D,
     worldX: number,
@@ -335,12 +353,12 @@ export class Sprites {
     isSliding: boolean = false
   ): void {
     const cx = worldX;
-    const cy = worldY;
+    const cy = worldY + 3; // sit slightly grounded near tile floor center
 
     const isTelegraphing = fuseTimer <= 0.8;
     const pulseRate = isTelegraphing ? 28 : (fuseTimer < 1.5 ? 12 : 6);
-    const scale = 1 + (isTelegraphing ? 0.16 : 0.08) * Math.sin(animTime * pulseRate);
-    const radius = 17 * scale;
+    const scale = 1 + (isTelegraphing ? 0.14 : 0.06) * Math.sin(animTime * pulseRate);
+    const radius = 11 * scale;
 
     ctx.save();
 
@@ -349,14 +367,14 @@ export class Sprites {
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+      ctx.arc(cx, cy, radius + 3.5, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 16, radius, radius * 0.45, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 10.5, radius, radius * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Bomb body (Solid colors, zero gradients)
@@ -367,38 +385,38 @@ export class Sprites {
     ctx.fill();
 
     ctx.strokeStyle = isFlashing ? '#fca5a5' : '#242428';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
     // Highlight pixel
     ctx.fillStyle = isFlashing ? '#ffffff' : '#52525b';
     ctx.beginPath();
-    ctx.arc(cx - 5, cy - 6, 3, 0, Math.PI * 2);
+    ctx.arc(cx - 3.5, cy - 3.5, 2, 0, Math.PI * 2);
     ctx.fill();
 
     // Cap
     ctx.fillStyle = '#71717a';
-    ctx.fillRect(cx - 5, cy - radius - 2, 10, 4);
+    ctx.fillRect(cx - 3.5, cy - radius - 2, 7, 3);
 
-    // Fuse wick
+    // Compact fuse wick
     ctx.strokeStyle = '#d97706';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - radius);
-    ctx.quadraticCurveTo(cx + 6, cy - radius - 8, cx + 3, cy - radius - 12);
+    ctx.moveTo(cx, cy - radius - 1);
+    ctx.quadraticCurveTo(cx + 3.5, cy - radius - 4.5, cx + 2, cy - radius - 6.5);
     ctx.stroke();
 
     // Spark tip
-    const sparkX = cx + 3;
-    const sparkY = cy - radius - 12;
+    const sparkX = cx + 2;
+    const sparkY = cy - radius - 6.5;
     ctx.fillStyle = '#f59e0b';
     ctx.beginPath();
-    ctx.arc(sparkX, sparkY, 4 + 2 * Math.sin(animTime * 20), 0, Math.PI * 2);
+    ctx.arc(sparkX, sparkY, 2.8 + 1.1 * Math.sin(animTime * 20), 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(sparkX, sparkY, 2, 0, Math.PI * 2);
+    ctx.arc(sparkX, sparkY, 1.3, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
@@ -484,7 +502,7 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw crisp dedicated Power-Up icon
+  // Draw crisp dedicated Power-Up icon (compact 28x28 pickup inside 48px cell)
   public static drawPowerUp(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -494,11 +512,13 @@ export class Sprites {
   ): void {
     const cx = gx * TILE_SIZE + TILE_SIZE / 2;
     const bobY = gy * TILE_SIZE + TILE_SIZE / 2 + Math.sin(animTime * 5) * 2.5;
+    const iconSize = 28;
+    const halfIcon = iconSize / 2;
 
     const iconImg = this.powerUpImages[type];
     if (iconImg && iconImg.complete && iconImg.naturalWidth > 0) {
       ctx.save();
-      ctx.drawImage(iconImg, cx - 17, bobY - 17, 34, 34);
+      ctx.drawImage(iconImg, cx - halfIcon, bobY - halfIcon, iconSize, iconSize);
       ctx.restore();
       return;
     }
@@ -520,7 +540,7 @@ export class Sprites {
       }
 
       ctx.save();
-      ctx.drawImage(img, col * w, row * h, w, h, cx - 17, bobY - 17, 34, 34);
+      ctx.drawImage(img, col * w, row * h, w, h, cx - halfIcon, bobY - halfIcon, iconSize, iconSize);
       ctx.restore();
       return;
     }
@@ -529,14 +549,14 @@ export class Sprites {
     ctx.save();
     ctx.fillStyle = '#121214';
     ctx.beginPath();
-    ctx.arc(cx, bobY, 17, 0, Math.PI * 2);
+    ctx.arc(cx, bobY, 13, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = '#242428';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.font = 'bold 11px monospace';
+    ctx.font = 'bold 10px monospace';
     ctx.fillStyle = '#F4F4F5';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -553,7 +573,7 @@ export class Sprites {
     ctx.restore();
   }
 
-  // Draw Bomberman Character
+  // Draw Bomberman Character with authentic 2:3 sprite proportions (36x54) towering over tiles & bombs
   public static drawPlayer(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -575,14 +595,14 @@ export class Sprites {
       ctx.strokeStyle = '#8E8E93';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.arc(x, y, 11, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(x - 6, y - 6);
-      ctx.lineTo(x + 6, y + 6);
-      ctx.moveTo(x + 6, y - 6);
-      ctx.lineTo(x - 6, y + 6);
+      ctx.moveTo(x - 5, y - 5);
+      ctx.lineTo(x + 5, y + 5);
+      ctx.moveTo(x + 5, y - 5);
+      ctx.lineTo(x - 5, y + 5);
       ctx.stroke();
       ctx.restore();
       return;
@@ -596,22 +616,22 @@ export class Sprites {
 
     const bounce = isWinner
       ? Math.abs(Math.sin(animTime * 10)) * 5
-      : (isMoving ? Math.abs(Math.sin(animTime * 14)) * 3 : 0);
+      : (isMoving ? Math.abs(Math.sin(animTime * 14)) * 2.5 : 0);
     const py = y - bounce;
 
-    // Ground Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    // Ground Shadow under boots
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.beginPath();
-    ctx.ellipse(x, y + 14, 15, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + 12, 14, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Shield ring (solid alpha, zero blur)
+    // Shield ring (tall ellipse around hero silhouette, solid alpha)
     if (hasShield) {
       ctx.strokeStyle = '#10B981';
       ctx.lineWidth = 2;
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
       ctx.beginPath();
-      ctx.arc(x, py, 23, 0, Math.PI * 2);
+      ctx.ellipse(x, py - 13, 21, 27, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -621,11 +641,11 @@ export class Sprites {
       ctx.strokeStyle = '#a855f7';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(x, py, 21, 0, Math.PI * 2);
+      ctx.ellipse(x, py - 13, 19, 25, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Crop from characters sprite sheet if loaded
+    // Crop from characters sprite sheet preserving natural 2:3 vertical proportions (36x54 inside 48px cell)
     if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
       const img = this.charactersImg;
       const colWidth = img.naturalWidth / 6;
@@ -658,23 +678,23 @@ export class Sprites {
         colWidth,
         rowHeight,
         -18,
-        -24,
+        -41,
         36,
-        38
+        54
       );
       ctx.restore();
     } else {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, py + 4, 13, 0, Math.PI * 2);
+      ctx.arc(x, py, 14, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(x - 9, py + 8, 18, 4);
+      ctx.fillRect(x - 10, py + 4, 20, 4);
 
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(x, py - 6, 12, 0, Math.PI * 2);
+      ctx.arc(x, py - 13, 14, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#cbd5e1';
       ctx.lineWidth = 1;
@@ -682,7 +702,7 @@ export class Sprites {
 
       ctx.fillStyle = '#0284c7';
       let visorX = x;
-      let visorY = py - 7;
+      let visorY = py - 14;
       if (facing === 'left') visorX -= 4;
       else if (facing === 'right') visorX += 4;
       else if (facing === 'up') visorY -= 3;
@@ -694,14 +714,15 @@ export class Sprites {
 
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, py - 19, 4, 0, Math.PI * 2);
+      ctx.arc(x, py - 28, 4, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Name tag in JetBrains Mono
+    // Name tag cleanly above helmet in JetBrains Mono
     const label = isCursed ? `${name.substring(0, 8)} [INV]` : name.substring(0, 12);
+    ctx.beginPath();
     ctx.fillStyle = '#121214';
-    ctx.roundRect(x - 39, py - 35, 78, 14, 3);
+    ctx.roundRect(x - 39, py - 51, 78, 12, 3);
     ctx.fill();
     ctx.strokeStyle = isCursed ? '#a855f7' : '#242428';
     ctx.lineWidth = 1;
@@ -711,7 +732,7 @@ export class Sprites {
     ctx.font = 'bold 9px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, x, py - 28);
+    ctx.fillText(label, x, py - 44.5);
 
     ctx.restore();
   }

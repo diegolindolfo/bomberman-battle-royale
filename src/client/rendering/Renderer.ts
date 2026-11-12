@@ -94,8 +94,13 @@ export class Renderer {
       }
     }
 
-    // 5. Draw Players
-    for (const player of snapshot.players) {
+    // 5. Draw Players sorted by alive status and vertical Y for clean 2.5D overlap
+    const sortedPlayers = [...snapshot.players].sort((a, b) => {
+      if (a.alive !== b.alive) return a.alive ? 1 : -1;
+      return a.y - b.y;
+    });
+
+    for (const player of sortedPlayers) {
       const isWinner = snapshot.phase === 'game_over' && snapshot.winner?.id === player.id;
       Sprites.drawPlayer(
         ctx,
@@ -113,15 +118,18 @@ export class Renderer {
         isWinner
       );
 
-      // Marker arrow for "YOU"
+      // Marker arrow for "YOU" cleanly above raised nametag
       if (player.id === myPlayerId && player.alive) {
         ctx.fillStyle = '#10b981';
+        ctx.strokeStyle = '#0A0A0B';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(player.x, player.y - 42);
-        ctx.lineTo(player.x - 6, player.y - 49);
-        ctx.lineTo(player.x + 6, player.y - 49);
+        ctx.moveTo(player.x, player.y - 54);
+        ctx.lineTo(player.x - 5, player.y - 60);
+        ctx.lineTo(player.x + 5, player.y - 60);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
       }
     }
 
