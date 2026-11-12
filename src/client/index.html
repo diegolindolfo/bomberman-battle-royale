@@ -3,9 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bomberman Battle Royale Web</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2226%22 font-size=%2226%22>💣</text></svg>">
+  <title>Bomberman Royale - Simulação Web em Tempo Real</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-main: #0A0A0B;
+      --bg-surface: #121214;
+      --bg-surface-hover: #18181B;
+      --border-subtle: #242428;
+      --border-active: #3F3F46;
+      --text-main: #F4F4F5;
+      --text-muted: #8E8E93;
+      --accent: #10B981;
+      --accent-text: #0A0A0B;
+      --danger: #EF4444;
+      --radius: 6px;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -14,81 +30,87 @@
     }
 
     body {
-      background: radial-gradient(circle at center, #1e1b4b 0%, #090a0f 100%);
-      color: #f8fafc;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
     header {
       width: 100%;
-      max-width: 900px;
+      border-bottom: 1px solid var(--border-subtle);
+      background-color: var(--bg-main);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-inner {
+      max-width: 1024px;
+      margin: 0 auto;
+      padding: 14px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    .logo-container {
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .brand-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text-main);
+      text-transform: uppercase;
+    }
+
+    .brand-version {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+      padding: 2px 6px;
+      border-radius: var(--radius);
+    }
+
+    .header-controls {
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    .logo-icon {
-      font-size: 2.2rem;
-      filter: drop-shadow(0 0 10px #f59e0b);
-      animation: pulse 1.5s infinite alternate;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      100% { transform: scale(1.1); }
-    }
-
-    .logo-text h1 {
-      font-size: 1.5rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      background: linear-gradient(90deg, #f59e0b, #ef4444, #ec4899);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-transform: uppercase;
-    }
-
-    .logo-text span {
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 0.75rem;
-      color: #94a3b8;
-      font-weight: 600;
-      letter-spacing: 2px;
+      color: var(--text-muted);
     }
 
-    .audio-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #f8fafc;
-      padding: 8px 14px;
-      border-radius: 9999px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: all 0.2s;
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--accent);
     }
 
-    .audio-btn:hover {
-      background: rgba(255, 255, 255, 0.18);
-    }
-
-    /* Screen container */
     main {
       width: 100%;
-      max-width: 900px;
-      padding: 20px;
+      max-width: 1024px;
+      padding: 28px 20px 48px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -98,231 +120,311 @@
       display: none;
       width: 100%;
       flex-direction: column;
-      align-items: center;
     }
 
     .screen.active {
       display: flex;
     }
 
-    /* Cards & Panels */
+    /* Section Panels */
     .panel {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 16px;
-      padding: 24px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 20px;
       width: 100%;
       margin-bottom: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
     }
 
     .panel-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 14px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+      text-transform: uppercase;
+    }
+
+    .panel-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Hero Banner Frame */
+    .hero-frame {
+      width: 100%;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+      background-color: var(--bg-surface);
+    }
+
+    .hero-frame img {
+      width: 100%;
+      height: auto;
+      max-height: 240px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hero-caption {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-subtle);
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      color: #38bdf8;
+      background-color: var(--bg-surface);
+    }
+
+    .hero-caption-text {
+      font-size: 0.85rem;
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    .hero-caption-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
     }
 
     /* Inputs & Form Controls */
-    .input-row {
+    .form-row {
       display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 10px;
+      margin-bottom: 14px;
       flex-wrap: wrap;
     }
 
-    input[type="text"], select {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #fff;
-      padding: 12px 16px;
-      border-radius: 10px;
-      font-size: 1rem;
+    input[type="text"] {
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
       outline: none;
       flex: 1;
       min-width: 200px;
+      transition: border-color 0.15s ease;
     }
 
-    input[type="text"]:focus, select:focus {
-      border-color: #38bdf8;
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="text"]::placeholder {
+      color: var(--text-muted);
     }
 
     /* Buttons */
     .btn {
-      background: #3b82f6;
-      border: none;
-      color: #fff;
-      padding: 12px 24px;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.2s;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-    }
-
-    .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      background-color: var(--accent);
+      color: var(--accent-text);
     }
 
     .btn-primary:hover {
-      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-    }
-
-    .btn-success {
-      background: linear-gradient(135deg, #10b981, #059669);
+      opacity: 0.9;
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background-color: transparent;
+      border-color: var(--border-subtle);
+      color: var(--text-main);
     }
 
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background-color: var(--bg-surface-hover);
+      border-color: var(--border-active);
     }
 
-    .btn-large {
-      padding: 16px 32px;
-      font-size: 1.2rem;
+    .btn-icon {
+      padding: 9px 12px;
+    }
+
+    /* Technical Arena Selection List */
+    .arena-table {
       width: 100%;
-    }
-
-    /* Arena Selection Cards */
-    .arena-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 20px;
-      width: 100%;
-    }
-
-    .arena-card {
-      background: rgba(0, 0, 0, 0.35);
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .arena-card:hover {
-      border-color: #38bdf8;
-      transform: scale(1.02);
-    }
-
-    .arena-card.selected {
-      border-color: #f59e0b;
-      box-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
-      background: rgba(245, 158, 11, 0.08);
-    }
-
-    .arena-badge {
-      font-size: 0.75rem;
-      background: #f59e0b;
-      color: #000;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-weight: 800;
-      display: inline-block;
-      margin-bottom: 6px;
-    }
-
-    .arena-title {
-      font-size: 1.1rem;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    .arena-desc {
-      font-size: 0.82rem;
-      color: #94a3b8;
-      line-height: 1.4;
-    }
-
-    /* Rooms list */
-    .room-item {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(0, 0, 0, 0.3);
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-direction: column;
+      gap: 8px;
     }
 
-    /* In-Game HUD */
+    .arena-row {
+      display: grid;
+      grid-template-columns: 100px 180px 1fr 100px;
+      align-items: center;
+      padding: 12px 16px;
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .arena-row:hover {
+      background-color: var(--bg-surface-hover);
+      border-color: var(--border-active);
+    }
+
+    .arena-row.selected {
+      border-color: var(--accent);
+      background-color: var(--bg-surface);
+    }
+
+    .arena-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .arena-row.selected .arena-id {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .arena-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: -0.02em;
+    }
+
+    .arena-mechanic {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .arena-status {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      text-align: right;
+      color: var(--text-muted);
+    }
+
+    .arena-row.selected .arena-status {
+      color: var(--accent);
+    }
+
+    /* Rooms technical table */
+    .rooms-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .rooms-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      font-weight: 500;
+    }
+
+    .rooms-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .rooms-table tr:hover td {
+      background-color: var(--bg-surface-hover);
+    }
+
+    /* HUD Bar */
     #hud {
       width: 100%;
       max-width: 720px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px 12px 0 0;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
       padding: 10px 16px;
-      font-weight: bold;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
     }
 
-    .hud-badge {
+    .hud-metric {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+    }
+
+    .hud-metric-label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .hud-metric-value {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .hud-timer-badge {
       font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      padding: 2px 8px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      background-color: var(--bg-main);
     }
 
-    .hud-timer {
-      font-size: 1.2rem;
-      color: #38bdf8;
-      font-family: monospace;
+    .hud-timer-badge.sudden-death {
+      border-color: var(--danger);
+      color: var(--danger);
     }
 
-    .hud-timer.sudden-death {
-      color: #ef4444;
-      animation: blink 0.8s infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    .hud-stats {
+    .hud-telemetry {
       display: flex;
-      gap: 12px;
-      font-size: 0.85rem;
-      color: #cbd5e1;
+      gap: 14px;
+      color: var(--text-muted);
+      font-size: 0.78rem;
     }
 
-    /* Game Canvas */
+    /* Canvas Frame */
     #canvas-container {
       position: relative;
       width: 100%;
       max-width: 720px;
       display: flex;
       justify-content: center;
-      background: #000;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-radius: 0 0 12px 12px;
+      background-color: #000000;
+      border: 1px solid var(--border-subtle);
+      border-radius: 0 0 var(--radius) var(--radius);
       overflow: hidden;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
     }
 
     canvas {
@@ -333,59 +435,73 @@
       image-rendering: pixelated;
     }
 
-    /* Touch Controls for mobile/tablets */
+    /* Touch Controls */
     #touch-controls {
       display: none;
       width: 100%;
       max-width: 720px;
       justify-content: space-between;
-      padding: 16px 10px;
-      margin-top: 10px;
+      align-items: center;
+      padding: 16px 0;
+      margin-top: 12px;
     }
 
     .dpad {
       display: grid;
-      grid-template-columns: repeat(3, 50px);
-      grid-template-rows: repeat(3, 50px);
-      gap: 6px;
+      grid-template-columns: repeat(3, 48px);
+      grid-template-rows: repeat(3, 48px);
+      gap: 4px;
     }
 
     .touch-btn {
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: #fff;
-      border-radius: 10px;
-      font-size: 1.4rem;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      user-select: none;
       touch-action: manipulation;
     }
 
     .touch-btn:active {
-      background: rgba(255, 255, 255, 0.35);
+      background-color: var(--bg-surface-hover);
+      border-color: var(--border-active);
+    }
+
+    .touch-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
     }
 
     .bomb-action-btn {
-      width: 90px;
-      height: 90px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      border: 3px solid #fecaca;
-      font-size: 2rem;
-      box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+      width: 80px;
+      height: 80px;
+      border-radius: var(--radius);
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-active);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
     }
 
-    /* Modal Overlay */
+    .bomb-action-btn:active {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* Modal */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(8px);
+      background-color: rgba(10, 10, 11, 0.85);
       display: none;
       align-items: center;
       justify-content: center;
@@ -397,38 +513,48 @@
     }
 
     .modal-box {
-      background: #0f172a;
-      border: 2px solid #38bdf8;
-      border-radius: 20px;
-      padding: 32px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 28px;
       max-width: 440px;
       width: 90%;
       text-align: center;
-      box-shadow: 0 0 50px rgba(56, 189, 248, 0.4);
-      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    @keyframes popIn {
-      0% { transform: scale(0.8); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .modal-icon {
-      font-size: 4rem;
+    .modal-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 8px;
+      border-radius: var(--radius);
+      display: inline-block;
       margin-bottom: 12px;
+      text-transform: uppercase;
     }
 
     .modal-title {
-      font-size: 1.8rem;
-      font-weight: 900;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
       margin-bottom: 10px;
+      color: var(--text-main);
     }
 
     .modal-winner {
-      font-size: 1.2rem;
-      color: #facc15;
-      font-weight: bold;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      color: var(--text-muted);
       margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
     }
 
     @media (hover: none) and (pointer: coarse) {
@@ -436,102 +562,146 @@
         display: flex;
       }
     }
+
+    @media (max-width: 680px) {
+      .arena-row {
+        grid-template-columns: 80px 1fr;
+        gap: 6px;
+      }
+      .arena-mechanic, .arena-status {
+        grid-column: span 2;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo-container">
-      <div class="logo-icon">💣</div>
-      <div class="logo-text">
-        <h1>Bomberman Battle Royale</h1>
-        <span>MULTI JOGADOR WEB</span>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-title">Bomberman Royale</span>
+        <span class="brand-version">v1.2.0</span>
+      </div>
+      <div class="header-controls">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span>Rede Ativa</span>
+        </div>
+        <button id="btn-sound-toggle" class="btn btn-secondary">Áudio: Ativo</button>
       </div>
     </div>
-    <button id="btn-sound-toggle" class="audio-btn">🔊 Som: Ligado</button>
   </header>
 
   <main>
     <!-- Screen 1: Lobby Screen -->
     <div id="screen-lobby" class="screen active">
-      <!-- Epic Pixel Art Hero Banner -->
-      <div style="width: 100%; border-radius: 16px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 12px 36px rgba(0,0,0,0.7); border: 2px solid rgba(255, 255, 255, 0.15); position: relative;">
-        <img src="/assets/banner.jpg" alt="Bomberman Battle Royale Hero Banner" style="width: 100%; height: auto; display: block; object-fit: cover; max-height: 280px;">
-        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(15,23,42,0.95), transparent); padding: 14px 20px; display: flex; justify-content: space-between; align-items: flex-end;">
-          <div>
-            <div style="font-size: 1.2rem; font-weight: 900; color: #facc15; text-shadow: 0 2px 8px rgba(0,0,0,0.8);">TORNEIO MULTIPLAYER ONLINE</div>
-            <div style="font-size: 0.85rem; color: #cbd5e1;">Sobreviva à tempestade de blocos e seja o último Bomberman de pé!</div>
-          </div>
+      <!-- Minimalist Frame for Graphic Asset -->
+      <div class="hero-frame">
+        <img src="/assets/banner.jpg" alt="Visão Geral do Torneio">
+        <div class="hero-caption">
+          <div class="hero-caption-text">Protocolo de Batalha com Colapso Perimetral Contínuo</div>
+          <div class="hero-caption-sub">Grid 15x13 • 30 Ticks/s</div>
         </div>
       </div>
 
+      <!-- Player & Quick Action Panel -->
       <div class="panel">
-        <div class="panel-title">👤 Perfil do Jogador</div>
-        <div class="input-row">
-          <input type="text" id="input-name" placeholder="Digite seu apelido..." maxlength="12" value="Bomber">
-          <button id="btn-quick-play" class="btn btn-primary btn-large">
-            ⚡ Partida Rápida (com Bots)
+        <div class="panel-header">
+          <span class="panel-title">Configuração do Jogador</span>
+          <span class="panel-meta">Identificação de Sessão</span>
+        </div>
+        <div class="form-row">
+          <input type="text" id="input-name" placeholder="Informe seu identificador..." maxlength="14" value="Operador_01">
+          <button id="btn-quick-play" class="btn btn-primary">
+            Iniciar Partida Rápida
           </button>
         </div>
       </div>
 
+      <!-- Arena Selection List (Structured table instead of generic cards) -->
       <div class="panel">
-        <div class="panel-title">🗺️ Selecione a Arena de Batalha</div>
-        <div class="arena-grid">
-          <div class="arena-card selected" data-arena="classic">
-            <span class="arena-badge">ARENA 1</span>
-            <div class="arena-title">🌿 Green Meadow</div>
-            <div class="arena-desc">Arena clássica com pilares de pedra, caixas de madeira e distribuição balanceada de power-ups.</div>
+        <div class="panel-header">
+          <span class="panel-title">Seleção de Arena</span>
+          <span class="panel-meta">3 Ambientes Disponíveis</span>
+        </div>
+        <div class="arena-table">
+          <div class="arena-row selected" data-arena="classic">
+            <span class="arena-id">ARENA-01</span>
+            <span class="arena-name">Green Meadow</span>
+            <span class="arena-mechanic">Pilares simétricos de pedra e caixas de madeira com distribuição padrão de recursos.</span>
+            <span class="arena-status">Selecionada</span>
           </div>
-          <div class="arena-card" data-arena="magma">
-            <span class="arena-badge" style="background:#ef4444; color:#fff;">ARENA 2</span>
-            <div class="arena-title">🌋 Magma Cavern</div>
-            <div class="arena-desc">Rochas vulcânicas ardentes com barris de pólvora e blocos voláteis que explodem em cadeia 360°!</div>
+          <div class="arena-row" data-arena="magma">
+            <span class="arena-id">ARENA-02</span>
+            <span class="arena-name">Magma Cavern</span>
+            <span class="arena-mechanic">Blocos voláteis de TNT inflamáveis que acionam detonações radiais em 360 graus.</span>
+            <span class="arena-status">Disponível</span>
           </div>
-          <div class="arena-card" data-arena="cyber">
-            <span class="arena-badge" style="background:#06b6d4; color:#000;">ARENA 3</span>
-            <div class="arena-title">⚡ Cyber Grid</div>
-            <div class="arena-desc">Instalação futurista com esteiras rolantes que aceleram bombas e portais de teletransporte quântico.</div>
+          <div class="arena-row" data-arena="cyber">
+            <span class="arena-id">ARENA-03</span>
+            <span class="arena-name">Cyber Grid</span>
+            <span class="arena-mechanic">Esteiras mecânicas aceleradoras de vetores e condutores quânticos de teletransporte.</span>
+            <span class="arena-status">Disponível</span>
           </div>
         </div>
       </div>
 
+      <!-- Multiplayer Sessions Panel -->
       <div class="panel">
-        <div class="panel-title">⚔️ Salas Multiplayer Online</div>
-        <div class="input-row">
-          <button id="btn-create-room" class="btn btn-success" style="flex:1;">
-            ➕ Criar Sala Multiplayer
+        <div class="panel-header">
+          <span class="panel-title">Sessões Multiplayer</span>
+          <span class="panel-meta">P2P / WebSockets</span>
+        </div>
+        <div class="form-row">
+          <button id="btn-create-room" class="btn btn-secondary">
+            Criar Nova Sala
           </button>
-          <input type="text" id="input-room-code" placeholder="Código da sala (ex: BOMB-1234)">
+          <input type="text" id="input-room-code" placeholder="Código da sala (ex: BOMB-8421)">
           <button id="btn-join-room" class="btn btn-secondary">
-            Entrar
+            Conectar à Sala
           </button>
         </div>
 
-        <div style="margin-top: 16px;">
-          <div style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 8px;">Salas Abertas no Servidor:</div>
-          <div id="rooms-list-container">
-            <div style="color: #64748b; font-size: 0.9rem; font-style: italic;">Nenhuma outra sala criada no momento. Seja o primeiro!</div>
-          </div>
+        <div style="margin-top: 14px;">
+          <table class="rooms-table">
+            <thead>
+              <tr>
+                <th>IDENTIFICADOR</th>
+                <th>ARENA</th>
+                <th>OCUPAÇÃO</th>
+                <th>STATUS</th>
+                <th style="text-align: right;">AÇÃO</th>
+              </tr>
+            </thead>
+            <tbody id="rooms-list-container">
+              <tr>
+                <td colspan="5" style="color: var(--text-muted); font-style: italic; padding: 14px 12px;">
+                  Nenhuma sessão pública ativa na rede no momento.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <!-- Screen 2: Waiting Room Lobby -->
     <div id="screen-room" class="screen">
-      <div class="panel" style="text-align: center;">
-        <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">SALA CRIADA</div>
-        <div id="room-code-display" style="font-size: 2.2rem; font-weight: 900; color: #f59e0b; margin: 8px 0;">BOMB-0000</div>
-        <div style="color: #cbd5e1; font-size: 0.95rem; margin-bottom: 20px;">Convide seus amigos abrindo uma nova aba ou passando o código da sala!</div>
+      <div class="panel" style="text-align: center; max-width: 600px; margin: 20px auto;">
+        <div class="panel-meta" style="margin-bottom: 6px;">IDENTIFICADOR DA SALA</div>
+        <div id="room-code-display" style="font-family: 'JetBrains Mono', monospace; font-size: 2.2rem; font-weight: 700; color: var(--accent); margin-bottom: 12px; letter-spacing: 0.05em;">BOMB-0000</div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px;">Compartilhe o código acima para conectar operadores adicionais à sessão.</p>
 
-        <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap;">
-          <button id="btn-copy-link" class="btn btn-secondary">📋 Copiar Link da Sala</button>
-          <button id="btn-start-game" class="btn btn-primary" style="font-size: 1.1rem; padding: 12px 32px;">🔥 Iniciar Partida!</button>
-          <button id="btn-leave-room" class="btn btn-secondary">Sair da Sala</button>
+        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 28px; flex-wrap: wrap;">
+          <button id="btn-copy-link" class="btn btn-secondary">Copiar Identificador</button>
+          <button id="btn-start-game" class="btn btn-primary">Iniciar Partida</button>
+          <button id="btn-leave-room" class="btn btn-secondary">Abandonar Sala</button>
         </div>
 
-        <div class="panel-title" style="justify-content: center;">👥 Jogadores na Sala (<span id="room-player-count">1/4</span>)</div>
-        <div id="room-players-list" style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
-          <!-- Loaded via JS -->
+        <div class="panel-header" style="justify-content: center;">
+          <span class="panel-title">Operadores Conectados (<span id="room-player-count">1/4</span>)</span>
+        </div>
+        <div id="room-players-list" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px;">
+          <!-- Dynamically populated -->
         </div>
       </div>
     </div>
@@ -539,17 +709,17 @@
     <!-- Screen 3: Gameplay Viewport -->
     <div id="screen-game" class="screen">
       <div id="hud">
-        <div class="hud-badge">
-          <span>👥 Vivos:</span>
-          <span id="hud-alive-count" style="color: #4ade80;">4 / 4</span>
+        <div class="hud-metric">
+          <span class="hud-metric-label">SOBREVIVENTES:</span>
+          <span class="hud-metric-value" id="hud-alive-count">4 / 4</span>
         </div>
-        <div class="hud-timer" id="hud-timer">02:30</div>
-        <div class="hud-stats">
-          <span id="hud-bombs">💣 1</span>
-          <span id="hud-fire">🔥 2</span>
-          <span id="hud-speed">👟 160</span>
-          <span id="hud-shield" style="display:none;">🛡️</span>
-          <span id="hud-kick" style="display:none;">🥾</span>
+        <div class="hud-timer-badge" id="hud-timer">02:30</div>
+        <div class="hud-telemetry">
+          <span id="hud-bombs">BOMBAS: 1</span>
+          <span id="hud-fire">RAIO: 2</span>
+          <span id="hud-speed">VEL: 160</span>
+          <span id="hud-shield" style="display:none; color: var(--accent);">ESCUDO</span>
+          <span id="hud-kick" style="display:none; color: var(--accent);">CHUTE</span>
         </div>
       </div>
 
@@ -557,35 +727,43 @@
         <canvas id="game-canvas"></canvas>
       </div>
 
-      <!-- Touch Controls -->
+      <!-- Clean Technical Touch Controls -->
       <div id="touch-controls">
         <div class="dpad">
           <div></div>
-          <button id="btn-up" class="touch-btn">⬆️</button>
+          <button id="btn-up" class="touch-btn" aria-label="Mover para cima">
+            <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
+          </button>
           <div></div>
-          <button id="btn-left" class="touch-btn">⬅️</button>
+          <button id="btn-left" class="touch-btn" aria-label="Mover para a esquerda">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
           <div></div>
-          <button id="btn-right" class="touch-btn">➡️</button>
+          <button id="btn-right" class="touch-btn" aria-label="Mover para a direita">
+            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
           <div></div>
-          <button id="btn-down" class="touch-btn">⬇️</button>
+          <button id="btn-down" class="touch-btn" aria-label="Mover para baixo">
+            <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
           <div></div>
         </div>
-        <div style="display: flex; align-items: center;">
-          <button id="btn-bomb" class="touch-btn bomb-action-btn">💣</button>
+        <div>
+          <button id="btn-bomb" class="touch-btn bomb-action-btn">BOMBA</button>
         </div>
       </div>
     </div>
   </main>
 
-  <!-- Victory / Game Over Modal -->
+  <!-- Modal End Game -->
   <div id="modal-gameover" class="modal-overlay">
     <div class="modal-box">
-      <div id="modal-icon" class="modal-icon">👑</div>
-      <div id="modal-title" class="modal-title">VITÓRIA ROYALE!</div>
-      <div id="modal-winner" class="modal-winner">Parabéns Bomber 1!</div>
-      <div style="display: flex; gap: 12px; justify-content: center;">
-        <button id="btn-play-again" class="btn btn-primary">Jogar Novamente</button>
-        <button id="btn-back-lobby" class="btn btn-secondary">Voltar ao Lobby</button>
+      <span class="modal-tag">Resultado Oficial</span>
+      <div id="modal-title" class="modal-title">Partida Encerrada</div>
+      <div id="modal-winner" class="modal-winner">Resultado verificado pelo sistema.</div>
+      <div class="modal-actions">
+        <button id="btn-play-again" class="btn btn-primary">Iniciar Nova Rodada</button>
+        <button id="btn-back-lobby" class="btn btn-secondary">Retornar ao Menu</button>
       </div>
     </div>
   </div>

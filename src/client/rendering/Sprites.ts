@@ -407,28 +407,29 @@ export class Sprites {
 
     // Fallback badge
     ctx.save();
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#121214';
     ctx.beginPath();
     ctx.arc(cx, bobY, 17, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#242428';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.font = '18px sans-serif';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#F4F4F5';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    let icon = '🔥';
-    if (type === PowerUpType.FIRE_UP) icon = '🔥';
-    else if (type === PowerUpType.BOMB_UP) icon = '💣';
-    else if (type === PowerUpType.SPEED_UP) icon = '👟';
-    else if (type === PowerUpType.BOMB_KICK) icon = '🥾';
-    else if (type === PowerUpType.SHIELD) icon = '🛡️';
-    else if (type === PowerUpType.SKULL) icon = '💀';
+    let code = 'FIRE';
+    if (type === PowerUpType.FIRE_UP) code = 'FIRE';
+    else if (type === PowerUpType.BOMB_UP) code = 'BOMB';
+    else if (type === PowerUpType.SPEED_UP) code = 'SPD';
+    else if (type === PowerUpType.BOMB_KICK) code = 'KICK';
+    else if (type === PowerUpType.SHIELD) code = 'SHLD';
+    else if (type === PowerUpType.SKULL) code = 'CRSE';
 
-    ctx.fillText(icon, cx, bobY);
+    ctx.fillText(code, cx, bobY);
     ctx.restore();
   }
 
@@ -448,11 +449,19 @@ export class Sprites {
   ): void {
     if (!alive) {
       ctx.save();
-      ctx.globalAlpha = 0.6;
-      ctx.font = '22px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('👻', x, y - 8);
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#8E8E93';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y - 6);
+      ctx.lineTo(x + 6, y + 6);
+      ctx.moveTo(x + 6, y - 6);
+      ctx.lineTo(x - 6, y + 6);
+      ctx.stroke();
       ctx.restore();
       return;
     }

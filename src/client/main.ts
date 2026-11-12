@@ -49,16 +49,22 @@ class BombermanApp {
     const soundBtn = document.getElementById('btn-sound-toggle') as HTMLButtonElement;
     soundBtn.addEventListener('click', () => {
       this.soundFx.enabled = !this.soundFx.enabled;
-      soundBtn.textContent = this.soundFx.enabled ? '🔊 Som: Ligado' : '🔇 Som: Mudo';
+      soundBtn.textContent = this.soundFx.enabled ? 'Áudio: Ativo' : 'Áudio: Desativado';
     });
 
-    // Arena Selection Cards
-    const cards = document.querySelectorAll('.arena-card');
-    cards.forEach(card => {
-      card.addEventListener('click', () => {
-        cards.forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        this.selectedArena = card.getAttribute('data-arena') as ArenaTheme;
+    // Arena Selection Rows
+    const rows = document.querySelectorAll('.arena-row');
+    rows.forEach(row => {
+      row.addEventListener('click', () => {
+        rows.forEach(r => {
+          r.classList.remove('selected');
+          const st = r.querySelector('.arena-status');
+          if (st) st.textContent = 'Disponível';
+        });
+        row.classList.add('selected');
+        const st = row.querySelector('.arena-status');
+        if (st) st.textContent = 'Selecionada';
+        this.selectedArena = row.getAttribute('data-arena') as ArenaTheme;
       });
     });
 
@@ -128,8 +134,8 @@ class BombermanApp {
     copyBtn.addEventListener('click', () => {
       if (this.currentRoomId) {
         navigator.clipboard.writeText(this.currentRoomId);
-        copyBtn.textContent = '✅ Código Copiado!';
-        setTimeout(() => { copyBtn.textContent = '📋 Copiar Link da Sala'; }, 2000);
+        copyBtn.textContent = 'Código copiado';
+        setTimeout(() => { copyBtn.textContent = 'Copiar identificador'; }, 2000);
       }
     });
 
@@ -287,13 +293,13 @@ class BombermanApp {
     if (timerEl) {
       const minutes = Math.floor(snapshot.timer / 60).toString().padStart(2, '0');
       const seconds = (snapshot.timer % 60).toString().padStart(2, '0');
-      timerEl.textContent = `${minutes}:${seconds}`;
 
       if (snapshot.suddenDeathActive) {
         timerEl.classList.add('sudden-death');
-        timerEl.textContent = `💀 SUDDEN DEATH: ${seconds}s`;
+        timerEl.textContent = `COLAPSO ATIVO: ${seconds}s`;
       } else {
         timerEl.classList.remove('sudden-death');
+        timerEl.textContent = `${minutes}:${seconds}`;
       }
     }
 
@@ -305,9 +311,9 @@ class BombermanApp {
       const shieldEl = document.getElementById('hud-shield');
       const kickEl = document.getElementById('hud-kick');
 
-      if (bombsEl) bombsEl.textContent = `💣 ${me.powerUps.bombLimit}`;
-      if (fireEl) fireEl.textContent = `🔥 ${me.powerUps.fireRange}`;
-      if (speedEl) speedEl.textContent = `👟 ${me.powerUps.speed}`;
+      if (bombsEl) bombsEl.textContent = `BOMBAS: ${me.powerUps.bombLimit}`;
+      if (fireEl) fireEl.textContent = `RAIO: ${me.powerUps.fireRange}`;
+      if (speedEl) speedEl.textContent = `VEL: ${me.powerUps.speed}`;
       if (shieldEl) shieldEl.style.display = me.powerUps.hasShield ? 'inline' : 'none';
       if (kickEl) kickEl.style.display = me.powerUps.canKick ? 'inline' : 'none';
     }
@@ -321,16 +327,16 @@ class BombermanApp {
         pList.innerHTML = '';
         snapshot.players.forEach(p => {
           const item = document.createElement('div');
-          item.style.background = 'rgba(255,255,255,0.08)';
-          item.style.padding = '8px 16px';
-          item.style.borderRadius = '9999px';
+          item.style.background = '#121214';
+          item.style.padding = '6px 12px';
+          item.style.borderRadius = '6px';
           item.style.display = 'flex';
           item.style.alignItems = 'center';
           item.style.gap = '8px';
-          item.style.border = `2px solid ${p.color}`;
-          item.innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${p.color};"></span>
-                           <span style="font-weight:bold;">${p.name}</span>
-                           ${p.isBot ? '<span style="font-size:0.75rem; background:#475569; padding:2px 6px; border-radius:4px;">BOT</span>' : ''}`;
+          item.style.border = `1px solid ${p.color}`;
+          item.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${p.color};"></span>
+                           <span style="font-weight:500; font-family:'JetBrains Mono', monospace; font-size:0.85rem;">${p.name}</span>
+                           ${p.isBot ? '<span style="font-size:0.7rem; color:#8E8E93; border:1px solid #242428; padding:1px 4px; border-radius:4px; font-family:\'JetBrains Mono\', monospace;">BOT</span>' : ''}`;
           pList.appendChild(item);
         });
       }
@@ -344,24 +350,20 @@ class BombermanApp {
     modal.classList.add('active');
     const titleEl = document.getElementById('modal-title');
     const winnerEl = document.getElementById('modal-winner');
-    const iconEl = document.getElementById('modal-icon');
 
     const winner = snapshot.winner;
     const isMeWinner = winner && winner.id === this.myPlayerId;
 
     if (isMeWinner) {
       this.soundFx.playVictory();
-      if (iconEl) iconEl.textContent = '👑';
-      if (titleEl) titleEl.textContent = 'VITÓRIA ROYALE!';
-      if (winnerEl) winnerEl.textContent = `Você é o último sobrevivente!`;
+      if (titleEl) titleEl.textContent = 'Partida Encerrada';
+      if (winnerEl) winnerEl.textContent = 'Resultado: Você venceu como único sobrevivente.';
     } else if (winner) {
-      if (iconEl) iconEl.textContent = '🏆';
-      if (titleEl) titleEl.textContent = 'PARTIDA FINALIZADA';
-      if (winnerEl) winnerEl.textContent = `Vencedor: ${winner.name}!`;
+      if (titleEl) titleEl.textContent = 'Partida Encerrada';
+      if (winnerEl) winnerEl.textContent = `Resultado: Vitória de ${winner.name}.`;
     } else {
-      if (iconEl) iconEl.textContent = '💥';
-      if (titleEl) titleEl.textContent = 'EMPATE TOTAL';
-      if (winnerEl) winnerEl.textContent = `Nenhum sobrevivente restou!`;
+      if (titleEl) titleEl.textContent = 'Partida Encerrada';
+      if (winnerEl) winnerEl.textContent = 'Resultado: Empate técnico sem sobreviventes.';
     }
   }
 
@@ -370,30 +372,31 @@ class BombermanApp {
     if (!container) return;
 
     if (rooms.length === 0) {
-      container.innerHTML = `<div style="color: #64748b; font-size: 0.9rem; font-style: italic;">Nenhuma outra sala criada no momento. Seja o primeiro!</div>`;
+      container.innerHTML = `<tr><td colspan="5" style="color: var(--text-muted); font-style: italic; padding: 14px 12px;">Nenhuma sessão pública ativa na rede no momento.</td></tr>`;
       return;
     }
 
     container.innerHTML = '';
     rooms.forEach(r => {
-      const div = document.createElement('div');
-      div.className = 'room-item';
-      div.innerHTML = `
-        <div>
-          <div style="font-weight: bold; color: #f8fafc;">${r.name} (${r.id})</div>
-          <div style="font-size: 0.8rem; color: #94a3b8;">Arena: ${r.arena.toUpperCase()} | Jogadores: ${r.playerCount}/${r.maxPlayers}</div>
-        </div>
-        <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" data-join="${r.id}">
-          Entrar
-        </button>
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-main);">${r.id}</td>
+        <td style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-size: 0.78rem;">${r.arena.toUpperCase()}</td>
+        <td style="font-family: 'JetBrains Mono', monospace;">${r.playerCount} / ${r.maxPlayers}</td>
+        <td><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color: var(--accent); margin-right:6px;"></span>Aberta</td>
+        <td style="text-align: right;">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" data-join="${r.id}">
+            Conectar
+          </button>
+        </td>
       `;
 
-      div.querySelector('button')?.addEventListener('click', () => {
-        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Bomber';
+      tr.querySelector('button')?.addEventListener('click', () => {
+        const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
         this.socket.emit('join_room', { roomId: r.id, name });
       });
 
-      container.appendChild(div);
+      container.appendChild(tr);
     });
   }
 
