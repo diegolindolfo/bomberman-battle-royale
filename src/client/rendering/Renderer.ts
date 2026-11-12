@@ -23,21 +23,31 @@ export class Renderer {
   }
 
   public render(snapshot: GameSnapshot | null, myPlayerId: string | null, dt: number): void {
-    this.animTime += dt;
-    this.particles.update(dt);
+    const isHitstop = snapshot && snapshot.hitstopTimer > 0;
+
+    // During hitstop (elimination frame freeze), hold animations to intensify impact
+    if (!isHitstop) {
+      this.animTime += dt;
+      this.particles.update(dt);
+    }
 
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     if (!snapshot) {
       // Waiting screen
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#0a0a0b';
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 20px sans-serif';
+      ctx.fillStyle = '#8e8e93';
+      ctx.font = '500 16px "Space Grotesk", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Aguardando início da partida...', MAP_WIDTH / 2, MAP_HEIGHT / 2);
       return;
+    }
+
+    // Trigger proportional screen shake based on number of active explosions
+    if (snapshot.explosions.length > 0) {
+      this.particles.triggerScreenShake(Math.min(18, 4 * snapshot.explosions.length));
     }
 
     ctx.save();
@@ -54,6 +64,13 @@ export class Renderer {
       for (let gx = 0; gx < GRID_COLS; gx++) {
         const tile = snapshot.grid[gy]?.[gx] ?? 0;
         Sprites.drawTile(ctx, gx, gy, tile, snapshot.arena, this.animTime);
+      }
+    }
+
+    // 1.5 Draw Rapid Crumbling Animations for Destroyed Blocks
+    if (snapshot.breakingBlocks && snapshot.breakingBlocks.length > 0) {
+      for (const bb of snapshot.breakingBlocks) {
+        Sprites.drawBreakingBlock(ctx, bb.gx, bb.gy, bb.timer, bb.maxTime, snapshot.arena);
       }
     }
 
@@ -92,7 +109,7 @@ export class Renderer {
 
       // Marker arrow for "YOU"
       if (player.id === myPlayerId && player.alive) {
-        ctx.fillStyle = '#facc15';
+        ctx.fillStyle = '#10b981';
         ctx.beginPath();
         ctx.moveTo(player.x, player.y - 42);
         ctx.lineTo(player.x - 6, player.y - 49);
@@ -105,11 +122,17 @@ export class Renderer {
     // 6. Draw Particle System
     this.particles.render(ctx);
 
-    // 7. Sudden Death Alert Banner
+    // 7. Hitstop Freeze Impact Flash
+    if (isHitstop) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    }
+
+    // 8. Sudden Death Alert Overlay
     if (snapshot.suddenDeathActive && snapshot.phase === 'playing') {
       const bannerPulse = Math.sin(this.animTime * 6);
       if (bannerPulse > 0) {
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.12)';
         ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
       }
     }

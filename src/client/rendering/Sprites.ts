@@ -49,14 +49,17 @@ export class Sprites {
     const y = gy * TILE_SIZE;
 
     // 1. Draw Floor Tile from Pixel Art Asset
-    const floorImg = this.tileImages[`${arena}_floor`];
+    const floorKey = (arena === 'ruins' || arena === 'classic') ? 'classic_floor'
+                   : (arena === 'foundry' || arena === 'magma') ? 'magma_floor'
+                   : 'cyber_floor';
+    const floorImg = this.tileImages[floorKey];
     if (floorImg && floorImg.complete && floorImg.naturalWidth > 0) {
       ctx.drawImage(floorImg, x, y, TILE_SIZE, TILE_SIZE);
     } else {
       // Solid fallback
-      if (arena === 'classic') {
+      if (arena === 'ruins' || arena === 'classic') {
         ctx.fillStyle = (gx + gy) % 2 === 0 ? '#3da443' : '#339239';
-      } else if (arena === 'magma') {
+      } else if (arena === 'foundry' || arena === 'magma') {
         ctx.fillStyle = (gx + gy) % 2 === 0 ? '#24100e' : '#1a0b0a';
       } else {
         ctx.fillStyle = '#090d16';
@@ -74,6 +77,9 @@ export class Sprites {
         break;
       case TileType.VOLATILE_BLOCK:
         this.drawVolatileBlock(ctx, x, y, animTime);
+        break;
+      case TileType.ICE_FLOOR:
+        this.drawIceFloor(ctx, x, y, animTime);
         break;
       case TileType.CONVEYOR_UP:
       case TileType.CONVEYOR_DOWN:
@@ -94,28 +100,60 @@ export class Sprites {
   }
 
   private static drawHardWall(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
-    const wallImg = this.tileImages[`${arena}_wall`];
+    const wallKey = (arena === 'ruins' || arena === 'classic') ? 'classic_wall'
+                  : (arena === 'foundry' || arena === 'magma') ? 'magma_wall'
+                  : 'cyber_wall';
+    const wallImg = this.tileImages[wallKey];
     if (wallImg && wallImg.complete && wallImg.naturalWidth > 0) {
       ctx.drawImage(wallImg, x, y, TILE_SIZE, TILE_SIZE);
       return;
     }
 
-    // Vector fallback
-    ctx.fillStyle = arena === 'magma' ? '#1c1917' : arena === 'cyber' ? '#0284c7' : '#64748b';
+    // Solid technical fallback (zero gradients)
+    ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#1c1917'
+                  : (arena === 'cryo' || arena === 'cyber') ? '#0284c7'
+                  : '#64748b';
     ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
   }
 
   private static drawSoftBlock(ctx: CanvasRenderingContext2D, x: number, y: number, arena: ArenaTheme): void {
-    const key = arena === 'magma' ? 'magma_wall' : `${arena}_block`;
+    const key = (arena === 'foundry' || arena === 'magma') ? 'magma_wall'
+              : (arena === 'cryo' || arena === 'cyber') ? 'cyber_wall'
+              : 'classic_block';
     const blockImg = this.tileImages[key];
     if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
       ctx.drawImage(blockImg, x, y, TILE_SIZE, TILE_SIZE);
       return;
     }
 
-    // Vector fallback
-    ctx.fillStyle = arena === 'magma' ? '#7f1d1d' : arena === 'cyber' ? '#4f46e5' : '#b45309';
+    // Solid technical fallback
+    ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#7f1d1d'
+                  : (arena === 'cryo' || arena === 'cyber') ? '#1e3a8a'
+                  : '#b45309';
     ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+  }
+
+  private static drawIceFloor(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
+    // Crisp frozen ice patch with reduced friction
+    ctx.save();
+    ctx.fillStyle = '#0e7490';
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+    // Crystalline frost highlights
+    ctx.strokeStyle = '#67e8f9';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y + TILE_SIZE - 4);
+    ctx.lineTo(x + TILE_SIZE - 4, y + 4);
+    ctx.moveTo(x + 12, y + TILE_SIZE - 4);
+    ctx.lineTo(x + TILE_SIZE - 4, y + 12);
+    ctx.stroke();
+
+    // Subtle edge border
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    ctx.restore();
   }
 
   private static drawVolatileBlock(ctx: CanvasRenderingContext2D, x: number, y: number, animTime: number): void {
@@ -218,7 +256,53 @@ export class Sprites {
     ctx.fillText('X', x + TILE_SIZE / 2, y + TILE_SIZE / 2);
   }
 
-  // Draw Bomb with fuse spark and pulse
+  // Draw 150ms crumbling animation for destroyed blocks
+  public static drawBreakingBlock(
+    ctx: CanvasRenderingContext2D,
+    gx: number,
+    gy: number,
+    timer: number,
+    maxTime: number,
+    arena: ArenaTheme
+  ): void {
+    const x = gx * TILE_SIZE;
+    const y = gy * TILE_SIZE;
+    const progress = Math.max(0, Math.min(1, 1 - timer / maxTime)); // 0 to 1
+    const alpha = Math.max(0, 1 - progress);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const offset = progress * 8;
+    const half = TILE_SIZE / 2;
+
+    const key = (arena === 'foundry' || arena === 'magma') ? 'magma_wall'
+              : (arena === 'cryo' || arena === 'cyber') ? 'cyber_wall'
+              : 'classic_block';
+    const blockImg = this.tileImages[key];
+
+    const quarters = [
+      { sx: 0, sy: 0, dx: x - offset, dy: y - offset },
+      { sx: half, sy: 0, dx: x + half + offset, dy: y - offset },
+      { sx: 0, sy: half, dx: x - offset, dy: y + half + offset },
+      { sx: half, sy: half, dx: x + half + offset, dy: y + half + offset }
+    ];
+
+    for (const q of quarters) {
+      if (blockImg && blockImg.complete && blockImg.naturalWidth > 0) {
+        ctx.drawImage(blockImg, q.sx, q.sy, half, half, q.dx, q.dy, half, half);
+      } else {
+        ctx.fillStyle = (arena === 'foundry' || arena === 'magma') ? '#7f1d1d'
+                      : (arena === 'cryo' || arena === 'cyber') ? '#1e3a8a'
+                      : '#b45309';
+        ctx.fillRect(q.dx, q.dy, half - 1, half - 1);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // Draw Bomb with fuse spark, solid pixel shading and accelerated telegraphing pulse (<0.8s)
   public static drawBomb(
     ctx: CanvasRenderingContext2D,
     gx: number,
@@ -229,8 +313,10 @@ export class Sprites {
     const cx = gx * TILE_SIZE + TILE_SIZE / 2;
     const cy = gy * TILE_SIZE + TILE_SIZE / 2;
 
-    const pulseRate = fuseTimer < 1.0 ? 18 : 6;
-    const scale = 1 + 0.12 * Math.sin(animTime * pulseRate);
+    // Accelerated pulse in final 0.8s
+    const isTelegraphing = fuseTimer <= 0.8;
+    const pulseRate = isTelegraphing ? 28 : (fuseTimer < 1.5 ? 12 : 6);
+    const scale = 1 + (isTelegraphing ? 0.16 : 0.08) * Math.sin(animTime * pulseRate);
     const radius = 17 * scale;
 
     ctx.save();
@@ -241,19 +327,26 @@ export class Sprites {
     ctx.ellipse(cx, cy + 16, radius, radius * 0.45, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bomb body
-    const grad = ctx.createRadialGradient(cx - 5, cy - 6, 2, cx, cy, radius);
-    grad.addColorStop(0, '#64748b');
-    grad.addColorStop(0.4, '#1e293b');
-    grad.addColorStop(1, '#020617');
-
-    ctx.fillStyle = grad;
+    // Bomb body - Solid colors, zero gradients
+    const isFlashing = isTelegraphing && Math.sin(animTime * 28) > 0;
+    ctx.fillStyle = isFlashing ? '#ef4444' : '#0a0a0b';
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
 
+    // Outer border ring
+    ctx.strokeStyle = isFlashing ? '#fca5a5' : '#242428';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Pixel highlight dot
+    ctx.fillStyle = isFlashing ? '#ffffff' : '#52525b';
+    ctx.beginPath();
+    ctx.arc(cx - 5, cy - 6, 3, 0, Math.PI * 2);
+    ctx.fill();
+
     // Metallic cap
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = '#71717a';
     ctx.fillRect(cx - 5, cy - radius - 2, 10, 4);
 
     // Fuse wick

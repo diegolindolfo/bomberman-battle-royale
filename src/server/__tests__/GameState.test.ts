@@ -94,7 +94,11 @@ describe('Bomberman Battle Royale GameState Core Tests', () => {
     // Detonate first bomb
     state.detonateBomb(state.bombs[0]);
 
-    // Both bombs should have exploded from chain reaction!
+    // Second bomb is queued for 50ms cascade delay
+    assert.strictEqual(state.bombs.length, 1);
+
+    // After 60ms update, cascading chain reaction detonates adjacent bomb
+    state.update(0.06);
     assert.strictEqual(state.bombs.length, 0);
     assert.ok(state.explosions.length >= 2);
   });

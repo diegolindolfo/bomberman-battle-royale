@@ -1,5 +1,5 @@
 import { GameState } from './GameState.js';
-import { PlayerInput, PlayerState, TileType } from '../shared/types.js';
+import { BotPersonality, PlayerInput, PlayerState, TileType } from '../shared/types.js';
 import { GRID_COLS, GRID_ROWS, TILE_SIZE } from '../shared/constants.js';
 
 interface Point {
@@ -11,14 +11,25 @@ interface PathNode {
   gx: number;
   gy: number;
   parent: PathNode | null;
+  dist: number;
 }
 
 export class BotAI {
   private botId: string;
+  private personality: BotPersonality;
+  private reactionTimer: number = 0; // Humanized reaction delay (150ms - 280ms)
+  private currentPathStep: Point | null = null;
   private actionCooldown: number = 0;
 
-  constructor(botId: string) {
+  constructor(botId: string, personality: BotPersonality = 'tactical') {
     this.botId = botId;
+    this.personality = personality;
+    this.resetReactionTimer();
+  }
+
+  private resetReactionTimer(): void {
+    // Humanized reaction window between 150ms and 280ms
+    this.reactionTimer = 0.15 + Math.random() * 0.13;
   }
 
   public computeInput(state: GameState, dt: number): PlayerInput {
@@ -28,75 +39,133 @@ export class BotAI {
       return defaultInput;
     }
 
+    if (bot.botPersonality && bot.botPersonality !== this.personality) {
+      this.personality = bot.botPersonality;
+    }
+
     this.actionCooldown = Math.max(0, this.actionCooldown - dt);
+    this.reactionTimer -= dt;
 
     const botGx = Math.floor(bot.x / TILE_SIZE);
     const botGy = Math.floor(bot.y / TILE_SIZE);
 
-    // 1. Build Danger Grid of real active hazards
-    const dangerGrid = this.buildDangerGrid(state);
-    const isCurrentlyInDanger = (dangerGrid[botGy]?.[botGx] ?? 0) > 0;
+    // 1. Build Real-Time Danger Grid storing nearest explosion fuseTimer per tile
+    const dangerTimers = this.buildDangerGrid(state);
+    const isCurrentlyInDanger = dangerTimers[botGy]?.[botGx] !== Infinity;
 
-    // 2. High Priority: Evade Danger immediately using step-by-step BFS path
-    if (isCurrentlyInDanger) {
-      const nextStep = this.findImmediateStepToSafety(state, botGx, botGy, dangerGrid);
-      if (nextStep) {
-        return this.moveTowardTile(bot, nextStep.gx, nextStep.gy, false);
+    // Recalculate decision if reaction timer expired or emergency danger
+    if (this.reactionTimer <= 0 || isCurrentlyInDanger) {
+      this.resetReactionTimer();
+
+      // --- HIERARQUIA 1: SOBREVIVÊNCIA (Evade) ---
+      if (isCurrentlyInDanger) {
+        this.currentPathStep = this.findImmediateStepToSafety(state, botGx, botGy, dangerTimers);
+        if (this.currentPathStep) {
+          return this.moveTowardTile(bot, this.currentPathStep.gx, this.currentPathStep.gy, false);
+        }
+      }
+
+      // --- HIERARQUIA 2 & 3: DECISÃO TÁTICA (Farm vs Engage) ---
+      let shouldTryBomb = this.actionCooldown <= 0 && bot.activeBombs < bot.powerUps.bombLimit;
+
+      if (this.personality === 'tactical') {
+        // Tactical bot: prioritizes collecting powerups (Farm) before engaging
+        if (state.powerUps.length > 0) {
+          const farmStep = this.findStepTowardPowerUp(state, botGx, botGy, dangerTimers);
+          if (farmStep) {
+            this.currentPathStep = farmStep;
+            return this.moveTowardTile(bot, farmStep.gx, farmStep.gy, false);
+          }
+        }
+
+        // Lookahead Anti-Suicide check for planting bomb to open map / clear blocks
+        if (shouldTryBomb) {
+          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers);
+          if (escapeStep) {
+            this.actionCooldown = 1.3;
+            this.currentPathStep = escapeStep;
+            return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
+          }
+        }
+
+        // Advance toward targets
+        const targetStep = this.findStepTowardTarget(state, botGx, botGy, dangerTimers);
+        if (targetStep) {
+          this.currentPathStep = targetStep;
+          return this.moveTowardTile(bot, targetStep.gx, targetStep.gy, false);
+        }
+      } else {
+        // Aggressive bot: prioritizes hunting players and planting pressure bombs
+        if (shouldTryBomb) {
+          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers);
+          if (escapeStep) {
+            this.actionCooldown = 1.2;
+            this.currentPathStep = escapeStep;
+            return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
+          }
+        }
+
+        const targetStep = this.findStepTowardTarget(state, botGx, botGy, dangerTimers);
+        if (targetStep) {
+          this.currentPathStep = targetStep;
+          return this.moveTowardTile(bot, targetStep.gx, targetStep.gy, false);
+        }
+
+        if (state.powerUps.length > 0) {
+          const farmStep = this.findStepTowardPowerUp(state, botGx, botGy, dangerTimers);
+          if (farmStep) {
+            this.currentPathStep = farmStep;
+            return this.moveTowardTile(bot, farmStep.gx, farmStep.gy, false);
+          }
+        }
       }
     }
 
-    // 3. If safe, decide whether to place a bomb
-    if (this.actionCooldown <= 0 && bot.activeBombs < bot.powerUps.bombLimit) {
-      const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerGrid);
-      if (escapeStep) {
-        this.actionCooldown = 1.4; // Cooldown to ensure escape
-        // Drop bomb and immediately step toward escape route!
-        return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
-      }
-    }
-
-    // 4. Seek nearest Power-Up if safe
-    if (state.powerUps.length > 0) {
-      const nextStep = this.findStepTowardPowerUp(state, botGx, botGy, dangerGrid);
-      if (nextStep) {
-        return this.moveTowardTile(bot, nextStep.gx, nextStep.gy, false);
-      }
-    }
-
-    // 5. Seek nearest opponent or soft block
-    const targetStep = this.findStepTowardTarget(state, botGx, botGy, dangerGrid);
-    if (targetStep) {
-      return this.moveTowardTile(bot, targetStep.gx, targetStep.gy, false);
+    // Continue following current path step smoothly
+    if (this.currentPathStep) {
+      return this.moveTowardTile(bot, this.currentPathStep.gx, this.currentPathStep.gy, false);
     }
 
     return defaultInput;
   }
 
+  /**
+   * Real-Time Danger Grid:
+   * Maps 2D grid storing minimum remaining seconds until explosion per tile.
+   * Infinity means completely safe tile!
+   */
   private buildDangerGrid(state: GameState): number[][] {
     const danger: number[][] = Array.from({ length: GRID_ROWS }, () =>
-      Array(GRID_COLS).fill(0)
+      Array(GRID_COLS).fill(Infinity)
     );
 
-    // Active explosions (maximum hazard)
+    // Active explosions (imminent lethal danger = 0.0s)
     for (const exp of state.explosions) {
       for (const cell of exp.cells) {
         if (cell.gy >= 0 && cell.gy < GRID_ROWS && cell.gx >= 0 && cell.gx < GRID_COLS) {
-          danger[cell.gy][cell.gx] = 100;
+          danger[cell.gy][cell.gx] = 0.0;
         }
       }
     }
 
-    // Active bombs blast paths
+    // Active bombs and flame lines
     for (const bomb of state.bombs) {
-      this.markBombDanger(danger, state.grid, bomb.gx, bomb.gy, bomb.fireRange);
+      this.markBombDanger(danger, state.grid, bomb.gx, bomb.gy, bomb.fireRange, bomb.fuseTimer);
     }
 
     return danger;
   }
 
-  private markBombDanger(danger: number[][], grid: number[][], bgx: number, bgy: number, range: number): void {
+  private markBombDanger(
+    danger: number[][],
+    grid: number[][],
+    bgx: number,
+    bgy: number,
+    range: number,
+    fuseTimer: number
+  ): void {
     if (bgy >= 0 && bgy < GRID_ROWS && bgx >= 0 && bgx < GRID_COLS) {
-      danger[bgy][bgx] = Math.max(danger[bgy][bgx], 85);
+      danger[bgy][bgx] = Math.min(danger[bgy][bgx], fuseTimer);
     }
 
     const dirs = [
@@ -118,7 +187,7 @@ export class BotAI {
           break;
         }
 
-        danger[gy][gx] = Math.max(danger[gy][gx], 85);
+        danger[gy][gx] = Math.min(danger[gy][gx], fuseTimer);
 
         if (tile === TileType.SOFT_BLOCK || tile === TileType.VOLATILE_BLOCK) {
           break;
@@ -128,19 +197,24 @@ export class BotAI {
   }
 
   /**
-   * Performs BFS and returns the FIRST ADJACENT STEP along the path to the nearest safe tile
+   * BFS to find closest safe tile before timer expires.
+   * CRITICAL RULE: Never cross a tile whose explosion timer is < 0.4s!
    */
-  private findImmediateStepToSafety(state: GameState, startGx: number, startGy: number, danger: number[][]): Point | null {
-    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null }];
+  private findImmediateStepToSafety(
+    state: GameState,
+    startGx: number,
+    startGy: number,
+    danger: number[][]
+  ): Point | null {
+    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null, dist: 0 }];
     const visited = new Set<string>();
     visited.add(`${startGx},${startGy}`);
 
     while (queue.length > 0) {
       const cur = queue.shift()!;
 
-      // Found safe tile!
-      if (danger[cur.gy][cur.gx] === 0) {
-        // Reconstruct path to find the immediate next step from start
+      // Reached safe tile!
+      if (danger[cur.gy][cur.gx] === Infinity) {
         return this.getFirstStepFromPath(cur, startGx, startGy);
       }
 
@@ -161,14 +235,17 @@ export class BotAI {
           visited.add(key);
           const tile = state.grid[n.gy][n.gx];
           const hasBomb = state.bombs.some(b => b.gx === n.gx && b.gy === n.gy);
-          const isWalkable = tile === TileType.EMPTY || tile === TileType.CONVEYOR_UP ||
-                            tile === TileType.CONVEYOR_DOWN || tile === TileType.CONVEYOR_LEFT ||
-                            tile === TileType.CONVEYOR_RIGHT || tile === TileType.TELEPORT_A ||
-                            tile === TileType.TELEPORT_B;
+          const isWalkable = tile === TileType.EMPTY || tile === TileType.ICE_FLOOR ||
+                            tile === TileType.CONVEYOR_UP || tile === TileType.CONVEYOR_DOWN ||
+                            tile === TileType.CONVEYOR_LEFT || tile === TileType.CONVEYOR_RIGHT ||
+                            tile === TileType.TELEPORT_A || tile === TileType.TELEPORT_B;
 
-          // Prefer walking onto tiles that are either safe or at least not active explosions
-          if (isWalkable && !hasBomb && danger[n.gy][n.gx] < 100) {
-            queue.push({ gx: n.gx, gy: n.gy, parent: cur });
+          const nTimer = danger[n.gy][n.gx];
+          // SAFETY LOOKAHEAD: Never cross a tile whose explosion timer is less than 0.4s!
+          const isLethalImminent = nTimer < 0.40;
+
+          if (isWalkable && !hasBomb && !isLethalImminent) {
+            queue.push({ gx: n.gx, gy: n.gy, parent: cur, dist: cur.dist + 1 });
           }
         }
       }
@@ -185,7 +262,6 @@ export class BotAI {
       curr = curr.parent;
     }
 
-    // path[0] is start. path[1] is the immediate adjacent step!
     if (path.length > 1) {
       return path[1];
     }
@@ -193,8 +269,9 @@ export class BotAI {
   }
 
   /**
-   * Verifies if dropping a bomb here is safe.
-   * Simulates the bomb and ensures at least one escape path to safety exists.
+   * Lookahead Anti-Suicide Rule:
+   * Simulates the new danger grid resulting from placing a bomb.
+   * Confirms at least one valid escape path to a safe tile exists.
    */
   private checkSafeBombPlacement(
     state: GameState,
@@ -203,7 +280,6 @@ export class BotAI {
     gy: number,
     danger: number[][]
   ): Point | null {
-    // Check if there is an adjacent breakable soft block or nearby enemy
     let hasTarget = false;
     const neighbors = [
       { gx, gy: gy - 1 },
@@ -237,18 +313,18 @@ export class BotAI {
 
     if (!hasTarget) return null;
 
-    // Simulate danger grid if bomb was dropped right here
+    // Simulate danger grid with the new bomb placed at (gx, gy)
     const simDanger = danger.map(row => [...row]);
-    this.markBombDanger(simDanger, state.grid, gx, gy, bot.powerUps.fireRange);
+    this.markBombDanger(simDanger, state.grid, gx, gy, bot.powerUps.fireRange, 2.8);
 
-    // Search for escape path from here to a tile with 0 simulated danger
+    // Lookahead: Confirm at least one safe escape route exists before placing
     const escapeStep = this.findImmediateStepToSafety(state, gx, gy, simDanger);
     return escapeStep;
   }
 
   private findStepTowardPowerUp(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
     for (const p of state.powerUps) {
-      if (danger[p.gy]?.[p.gx] === 0) {
+      if (danger[p.gy]?.[p.gx] === Infinity) {
         const step = this.bfsToDestination(state, botGx, botGy, p.gx, p.gy, danger);
         if (step) return step;
       }
@@ -257,7 +333,6 @@ export class BotAI {
   }
 
   private findStepTowardTarget(state: GameState, botGx: number, botGy: number, danger: number[][]): Point | null {
-    // Find closest alive opponent
     let closestEnemy: PlayerState | null = null;
     let minDist = Infinity;
 
@@ -290,16 +365,15 @@ export class BotAI {
     destGy: number,
     danger: number[][]
   ): Point | null {
-    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null }];
+    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null, dist: 0 }];
     const visited = new Set<string>();
     visited.add(`${startGx},${startGy}`);
 
     let steps = 0;
-    while (queue.length > 0 && steps < 60) {
+    while (queue.length > 0 && steps < 70) {
       steps++;
       const cur = queue.shift()!;
 
-      // Reached adjacent to or directly at destination
       if (Math.abs(cur.gx - destGx) + Math.abs(cur.gy - destGy) <= 1) {
         return this.getFirstStepFromPath(cur, startGx, startGy);
       }
@@ -321,12 +395,12 @@ export class BotAI {
           visited.add(key);
           const tile = state.grid[n.gy][n.gx];
           const hasBomb = state.bombs.some(b => b.gx === n.gx && b.gy === n.gy);
-          const isWalkable = tile === TileType.EMPTY || tile === TileType.CONVEYOR_UP ||
-                            tile === TileType.CONVEYOR_DOWN || tile === TileType.CONVEYOR_LEFT ||
-                            tile === TileType.CONVEYOR_RIGHT;
+          const isWalkable = tile === TileType.EMPTY || tile === TileType.ICE_FLOOR ||
+                            tile === TileType.CONVEYOR_UP || tile === TileType.CONVEYOR_DOWN ||
+                            tile === TileType.CONVEYOR_LEFT || tile === TileType.CONVEYOR_RIGHT;
 
-          if (isWalkable && !hasBomb && danger[n.gy][n.gx] === 0) {
-            queue.push({ gx: n.gx, gy: n.gy, parent: cur });
+          if (isWalkable && !hasBomb && danger[n.gy][n.gx] === Infinity) {
+            queue.push({ gx: n.gx, gy: n.gy, parent: cur, dist: cur.dist + 1 });
           }
         }
       }
@@ -345,7 +419,7 @@ export class BotAI {
     let dx = 0;
     let dy = 0;
 
-    const threshold = 5;
+    const threshold = 4;
 
     if (Math.abs(diffX) > threshold) {
       dx = diffX > 0 ? 1 : -1;

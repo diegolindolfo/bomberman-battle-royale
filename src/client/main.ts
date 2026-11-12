@@ -20,7 +20,7 @@ class BombermanApp {
   private currentRoomId: string | null = null;
   private myPlayerId: string | null = null;
   private isHost: boolean = false;
-  private selectedArena: ArenaTheme = 'classic';
+  private selectedArena: ArenaTheme = 'ruins';
 
   private lastSnapshot: GameSnapshot | null = null;
   private prevBombCount: number = 0;
@@ -262,7 +262,7 @@ class BombermanApp {
         this.renderer.particles.emitExplosion(
           center.gx * 48 + 24,
           center.gy * 48 + 24,
-          snapshot.arena === 'magma' ? 'volatile' : 'fire'
+          (snapshot.arena === 'foundry' || snapshot.arena === 'magma') ? 'volatile' : 'fire'
         );
       }
     }

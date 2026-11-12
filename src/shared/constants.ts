@@ -10,13 +10,25 @@ export const TICK_RATE = 30; // 30 ticks per second on server
 export const TICK_DELTA = 1 / TICK_RATE;
 
 export const BOMB_FUSE_TIME = 2.8; // seconds
+export const TELEGRAPH_PULSE_THRESHOLD = 0.8; // seconds remaining when bomb pulses rapidly
+export const CHAIN_REACTION_DELAY = 0.05; // 50ms cascade delay between chained bombs
+export const HITSTOP_DURATION = 0.035; // 35ms frame freeze on player/bot elimination
+export const BLOCK_BREAK_DURATION = 0.15; // 150ms destructible block crumble animation
+export const INPUT_BUFFER_WINDOW = 0.16; // 160ms input buffer for bomb placement
+
 export const EXPLOSION_DURATION = 0.55; // seconds
-export const BOMB_SLIDE_SPEED = 320; // pixels per second when kicked
+export const BOMB_SLIDE_SPEED = 340; // pixels per second when kicked
 export const INVINCIBLE_TIME_ON_START = 2.0;
 
-export const BASE_PLAYER_SPEED = 160; // pixels per second
+export const BASE_PLAYER_SPEED = 165; // pixels per second
 export const SPEED_UP_BOOST = 25;
 export const MAX_PLAYER_SPEED = 280;
+
+// Grid navigation & physics
+export const PLAYER_HITBOX_RADIUS = 13; // 26px box in 48px corridor = 11px clearance on each side
+export const CORNER_ROUNDING_THRESHOLD = 19; // 40% of 48px tile (19.2px)
+export const CRYO_ICE_FRICTION = 0.88; // low friction for cryogenic lab inertia
+export const NORMAL_FRICTION = 0.0;    // instant response on standard terrain
 
 export const BASE_BOMB_LIMIT = 1;
 export const MAX_BOMB_LIMIT = 8;
@@ -39,29 +51,48 @@ export const PLAYER_COLORS = [
   '#f97316'  // Orange
 ];
 
-export const ARENAS: Record<ArenaTheme, ArenaSettings> = {
+export const ARENAS: Record<string, ArenaSettings> = {
+  ruins: {
+    id: 'ruins',
+    name: 'Ruínas da Arena',
+    description: 'Ambiente clássico equilibrado com ritmo focado em controle espacial e destruição metódica.',
+    mechanic: 'Densidade média de blocos (65%) e alta previsibilidade tática.',
+    backgroundColor: '#0c0d10'
+  },
+  cryo: {
+    id: 'cryo',
+    name: 'Laboratório Criogênico',
+    description: 'Instalação sub-zero com placas de gelo térmico e física de baixa inércia.',
+    mechanic: 'Piso com derrapagem controlada e bombas chutadas com deslizamento estendido.',
+    backgroundColor: '#080d14'
+  },
+  foundry: {
+    id: 'foundry',
+    name: 'Fundição Industrial',
+    description: 'Complexo siderúrgico com esteiras mecânicas ativas e barreiras metálicas.',
+    mechanic: 'Esteiras de transporte rápido que deslocam operadores e bombas armadas.',
+    backgroundColor: '#140c0a'
+  },
+  // Aliases for backwards compatibility
   classic: {
     id: 'classic',
-    name: 'Green Meadow',
-    description: 'Arena clássica de grama com pilares de pedra e caixas de madeira.',
-    backgroundColor: '#2e7d32',
-    floorPattern: '#388e3c',
-    specialHazards: 'Padrão clássico com alta densidade de itens'
+    name: 'Ruínas da Arena',
+    description: 'Ambiente clássico equilibrado.',
+    mechanic: 'Padrão clássico equilibrado',
+    backgroundColor: '#0c0d10'
   },
   magma: {
     id: 'magma',
-    name: 'Magma Cavern',
-    description: 'Rochas vulcânicas ardentes com blocos voláteis que explodem em cadeia!',
-    backgroundColor: '#26110f',
-    floorPattern: '#3e1b17',
-    specialHazards: 'Blocos de dinamite voláteis que explodem em 360° ao contato do fogo'
+    name: 'Fundição Industrial',
+    description: 'Complexo com perigos industriais.',
+    mechanic: 'Blocos voláteis e perigos térmicos',
+    backgroundColor: '#140c0a'
   },
   cyber: {
     id: 'cyber',
-    name: 'Cyber Grid',
-    description: 'Instalação neon com esteiras rolantes direcionais e portais quânticos.',
-    backgroundColor: '#0a0d1a',
-    floorPattern: '#12182d',
-    specialHazards: 'Esteiras rolantes que aceleram bombas e portais de teletransporte'
+    name: 'Laboratório Criogênico',
+    description: 'Ambiente criogênico de alta velocidade.',
+    mechanic: 'Física criogênica e esteiras',
+    backgroundColor: '#080d14'
   }
 };
