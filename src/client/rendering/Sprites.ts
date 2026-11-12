@@ -12,7 +12,7 @@ export class Sprites {
     if (typeof window === 'undefined') return;
 
     this.charactersImg = new Image();
-    this.charactersImg.src = '/assets/characters.jpg';
+    this.charactersImg.src = '/assets/robos-sem-fundo.png';
 
     this.bombsImg = new Image();
     this.bombsImg.src = '/assets/bombs_explosions.jpg';
