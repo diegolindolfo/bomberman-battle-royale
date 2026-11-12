@@ -300,10 +300,16 @@ export class GameState {
     };
   }
 
-  public addPlayer(id: string, name: string, isBot: boolean = false): PlayerState {
+  public addPlayer(id: string, name: string, isBot: boolean = false, customColor?: string): PlayerState {
     const slotIndex = this.players.size;
     const spawn = this.getSpawnPosition(slotIndex);
-    const color = PLAYER_COLORS[slotIndex % PLAYER_COLORS.length];
+
+    let color = customColor;
+    if (!color) {
+      const taken = new Set(Array.from(this.players.values()).map(p => p.color.toLowerCase()));
+      const available = PLAYER_COLORS.filter(c => !taken.has(c.toLowerCase()));
+      color = available.length > 0 ? available[0] : PLAYER_COLORS[slotIndex % PLAYER_COLORS.length];
+    }
 
     const player: PlayerState = {
       id,

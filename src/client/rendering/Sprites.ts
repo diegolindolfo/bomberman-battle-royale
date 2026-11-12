@@ -599,7 +599,7 @@ export class Sprites {
     // Ground Shadow under boots
     ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.beginPath();
-    ctx.ellipse(x, y + 12, 14, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + 13, 16, 5.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Shield ring (tall ellipse around hero silhouette, solid alpha)
@@ -608,7 +608,7 @@ export class Sprites {
       ctx.lineWidth = 2;
       ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
       ctx.beginPath();
-      ctx.ellipse(x, py - 13, 21, 27, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, py - 18, 25, 34, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -618,11 +618,11 @@ export class Sprites {
       ctx.strokeStyle = '#a855f7';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.ellipse(x, py - 13, 19, 25, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, py - 18, 23, 31, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Crop from animated 9x6 characters sprite sheet (exact 2:3 vertical proportions 36x54)
+    // Crop from animated 9x6 characters sprite sheet (heroic 44x66 proportions, zero collision impact)
     if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
       const img = this.charactersImg;
       const colWidth = img.naturalWidth / 9;
@@ -661,24 +661,24 @@ export class Sprites {
         row * rowHeight,
         colWidth,
         rowHeight,
-        -18,
-        -41,
-        36,
-        54
+        -22,
+        -51,
+        44,
+        66
       );
       ctx.restore();
     } else {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, py, 14, 0, Math.PI * 2);
+      ctx.arc(x, py, 16, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(x - 10, py + 4, 20, 4);
+      ctx.fillRect(x - 12, py + 5, 24, 5);
 
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(x, py - 13, 14, 0, Math.PI * 2);
+      ctx.arc(x, py - 15, 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#cbd5e1';
       ctx.lineWidth = 1;
@@ -686,19 +686,19 @@ export class Sprites {
 
       ctx.fillStyle = '#0284c7';
       let visorX = x;
-      let visorY = py - 14;
-      if (facing === 'left') visorX -= 4;
-      else if (facing === 'right') visorX += 4;
-      else if (facing === 'up') visorY -= 3;
+      let visorY = py - 16;
+      if (facing === 'left') visorX -= 5;
+      else if (facing === 'right') visorX += 5;
+      else if (facing === 'up') visorY -= 4;
       else if (facing === 'down') visorY += 1;
 
       ctx.beginPath();
-      ctx.ellipse(visorX, visorY, 6, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(visorX, visorY, 7, 5, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, py - 28, 4, 0, Math.PI * 2);
+      ctx.arc(x, py - 32, 5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -706,7 +706,7 @@ export class Sprites {
     const label = isCursed ? `${name.substring(0, 8)} [INV]` : name.substring(0, 12);
     ctx.beginPath();
     ctx.fillStyle = '#121214';
-    ctx.roundRect(x - 39, py - 51, 78, 12, 3);
+    ctx.roundRect(x - 42, py - 63, 84, 13, 3);
     ctx.fill();
     ctx.strokeStyle = isCursed ? '#a855f7' : '#242428';
     ctx.lineWidth = 1;
@@ -716,8 +716,51 @@ export class Sprites {
     ctx.font = 'bold 9px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, x, py - 44.5);
+    ctx.fillText(label, x, py - 56.5);
 
     ctx.restore();
+  }
+
+  // Draw clean avatar preview for lobby selection
+  public static drawAvatarPreview(canvas: HTMLCanvasElement, colorHex: string): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    let row = 0;
+    const c = colorHex.toLowerCase();
+    if (c.includes('ef4444') || c.includes('red')) row = 0;
+    else if (c.includes('3b82f6') || c.includes('blue')) row = 1;
+    else if (c.includes('10b981') || c.includes('green')) row = 2;
+    else if (c.includes('f59e0b') || c.includes('yellow')) row = 3;
+    else if (c.includes('8b5cf6') || c.includes('purple')) row = 4;
+    else row = 5;
+
+    // Dark ground shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h - 7, w * 0.35, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (this.charactersImg && this.charactersImg.complete && this.charactersImg.naturalWidth > 0) {
+      const img = this.charactersImg;
+      const colWidth = img.naturalWidth / 9;
+      const rowHeight = img.naturalHeight / 6;
+
+      const targetH = Math.round(h - 12);
+      const targetW = Math.round(targetH * (2 / 3));
+      const dx = Math.round((w - targetW) / 2);
+      const dy = Math.round((h - targetH) / 2 - 3);
+
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, row * rowHeight, colWidth, rowHeight, dx, dy, targetW, targetH);
+    } else {
+      ctx.fillStyle = colorHex;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 2, 16, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }

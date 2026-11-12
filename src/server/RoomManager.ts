@@ -47,13 +47,14 @@ export class RoomManager {
     arena: ArenaTheme = 'ruins',
     maxPlayers: number = 4,
     fillWithBots: boolean = true,
-    autoStart: boolean = false
+    autoStart: boolean = false,
+    customColor?: string
   ): Room {
     this.leaveRoom(socket);
 
     const roomId = 'BOMB-' + Math.floor(1000 + Math.random() * 9000);
     const state = new GameState(arena);
-    const player = state.addPlayer(socket.id, playerName || 'Operador_01', false);
+    const player = state.addPlayer(socket.id, playerName || 'Operador_01', false, customColor);
 
     const room: Room = {
       id: roomId,
@@ -90,7 +91,7 @@ export class RoomManager {
     return room;
   }
 
-  public joinRoom(socket: Socket, roomId: string, playerName: string): boolean {
+  public joinRoom(socket: Socket, roomId: string, playerName: string, customColor?: string): boolean {
     this.leaveRoom(socket);
 
     const room = this.rooms.get(roomId);
@@ -109,7 +110,7 @@ export class RoomManager {
       return false;
     }
 
-    const player = room.state.addPlayer(socket.id, playerName || `Player ${room.state.players.size + 1}`, false);
+    const player = room.state.addPlayer(socket.id, playerName || `Player ${room.state.players.size + 1}`, false, customColor);
     room.socketToPlayer.set(socket.id, player.id);
     this.socketRoomMap.set(socket.id, roomId);
     socket.join(roomId);

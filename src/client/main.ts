@@ -6,6 +6,7 @@ import { InputHandler } from './input/InputHandler.js';
 import { GameState } from '../server/GameState.js';
 import { BotAI } from '../server/BotAI.js';
 import { TILE_SIZE } from '../shared/constants.js';
+import { Sprites } from './rendering/Sprites.js';
 
 class BombermanApp {
   private socket: Socket;
@@ -22,6 +23,7 @@ class BombermanApp {
   private myPlayerId: string | null = null;
   private isHost: boolean = false;
   private selectedArena: ArenaTheme = 'ruins';
+  private selectedColor: string = '#3b82f6';
 
   private lastSnapshot: GameSnapshot | null = null;
 
@@ -141,8 +143,16 @@ class BombermanApp {
       this.lastSnapshot = null;
       this.resetMatchTrackers();
       this.showScreen('screen-lobby');
+      this.updateAvatarPreview();
     } else {
       window.location.reload();
+    }
+  }
+
+  private updateAvatarPreview(): void {
+    const canvas = document.getElementById('avatar-preview-canvas') as HTMLCanvasElement | null;
+    if (canvas) {
+      Sprites.drawAvatarPreview(canvas, this.selectedColor);
     }
   }
 
@@ -209,7 +219,7 @@ class BombermanApp {
     this.resetMatchTrackers();
     if (this.isLocalMode) {
       const name = (document.getElementById('input-name') as HTMLInputElement).value.trim() || 'Operador_01';
-      this.startLocalGame(name, this.selectedArena);
+      this.startLocalGame(name, this.selectedArena, this.selectedColor);
     } else {
       this.socket.emit('restart_game', { arena: this.selectedArena });
     }
@@ -249,21 +259,51 @@ class BombermanApp {
       }
     });
 
-    // Arena Selection Rows
-    const rows = document.querySelectorAll('.arena-row');
-    rows.forEach(row => {
-      row.addEventListener('click', () => {
-        rows.forEach(r => {
-          r.classList.remove('selected');
-          const st = r.querySelector('.arena-status');
-          if (st) st.textContent = 'Disponível';
-        });
-        row.classList.add('selected');
-        const st = row.querySelector('.arena-status');
-        if (st) st.textContent = 'Selecionada';
-        this.selectedArena = row.getAttribute('data-arena') as ArenaTheme;
+    // Character Skin Chips
+    const skinChips = document.querySelectorAll('.skin-chip');
+    skinChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        skinChips.forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        this.selectedColor = chip.getAttribute('data-color') || '#3b82f6';
+        this.updateAvatarPreview();
       });
     });
+
+    // Arena Selection Cards & Rows
+    const arenaCards = document.querySelectorAll('.arena-card, .arena-row');
+    arenaCards.forEach(card => {
+      card.addEventListener('click', () => {
+        arenaCards.forEach(c => {
+          c.classList.remove('selected');
+          const st = c.querySelector('.arena-card-status, .arena-status');
+          if (st) st.textContent = 'Disponível';
+        });
+        card.classList.add('selected');
+        const st = card.querySelector('.arena-card-status, .arena-status');
+        if (st) {
+          st.innerHTML = '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color: var(--accent);"></span> Ativa';
+        }
+        this.selectedArena = card.getAttribute('data-arena') as ArenaTheme;
+      });
+    });
+
+    // Multiplayer Section Toggle
+    const mpToggle = document.getElementById('header-multiplayer-toggle');
+    const mpBody = document.getElementById('multiplayer-container-body');
+    const mpBadge = document.getElementById('multiplayer-status-badge');
+    if (mpToggle && mpBody) {
+      mpToggle.addEventListener('click', () => {
+        const isHidden = mpBody.style.display === 'none';
+        mpBody.style.display = isHidden ? 'block' : 'none';
+        if (mpBadge) mpBadge.textContent = isHidden ? 'Ocultar ▲' : 'Salas Privadas ▼';
+      });
+    }
+
+    // Initial Avatar Preview renders
+    this.updateAvatarPreview();
+    setTimeout(() => this.updateAvatarPreview(), 300);
+    setTimeout(() => this.updateAvatarPreview(), 1200);
 
     // Quick Play with Bots (atomic autoStart on server or instant local browser simulation)
     const quickPlayBtn = document.getElementById('btn-quick-play') as HTMLButtonElement;
@@ -283,10 +323,11 @@ class BombermanApp {
           arena: this.selectedArena,
           maxPlayers: 4,
           fillWithBots: true,
-          autoStart: true
+          autoStart: true,
+          color: this.selectedColor
         });
       } else {
-        this.startLocalGame(name, this.selectedArena);
+        this.startLocalGame(name, this.selectedArena, this.selectedColor);
       }
     });
 
@@ -373,7 +414,7 @@ class BombermanApp {
     });
   }
 
-  private startLocalGame(playerName: string, arena: ArenaTheme): void {
+  private startLocalGame(playerName: string, arena: ArenaTheme, playerColor: string = this.selectedColor): void {
     this.isLocalMode = true;
     this.isHost = true;
     this.resetMatchTrackers();
@@ -381,7 +422,7 @@ class BombermanApp {
     this.localState = new GameState(arena);
     this.localBots.clear();
 
-    const me = this.localState.addPlayer('player_local', playerName, false);
+    const me = this.localState.addPlayer('player_local', playerName, false, playerColor);
     this.myPlayerId = me.id;
 
     // Add 3 Tactical & Aggressive AI Bots
@@ -562,7 +603,7 @@ class BombermanApp {
     const timerEl = document.getElementById('hud-timer');
     if (timerEl) {
       const minutes = Math.floor(snapshot.timer / 60).toString().padStart(2, '0');
-      const seconds = (snapshot.timer % 60).toString().padStart(2, '0');
+      const seconds = Math.floor(snapshot.timer % 60).toString().padStart(2, '0');
 
       if (snapshot.suddenDeathActive) {
         timerEl.classList.add('sudden-death');

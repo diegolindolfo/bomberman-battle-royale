@@ -36,9 +36,25 @@ export const MAX_BOMB_LIMIT = 8;
 export const BASE_FIRE_RANGE = 2;
 export const MAX_FIRE_RANGE = 9;
 
-export const ROUND_TIME_TOTAL = 150; // 2.5 minutes
-export const SUDDEN_DEATH_START_TIME = 60; // Sudden death begins at 60s remaining
+export const ROUND_TIME_TOTAL = 60; // 1 minute fast-paced match
+export const SUDDEN_DEATH_START_TIME = 20; // Sudden death begins at 20s remaining
 export const SUDDEN_DEATH_DROP_INTERVAL = 0.85; // new block drops every 0.85s
+
+export interface CharacterSkin {
+  id: string;
+  name: string;
+  hex: string;
+  description: string;
+}
+
+export const CHARACTER_SKINS: CharacterSkin[] = [
+  { id: 'blue', name: 'Cobalto', hex: '#3b82f6', description: 'Blindagem azul tática' },
+  { id: 'red', name: 'Carmesim', hex: '#ef4444', description: 'Blindagem vermelha de assalto' },
+  { id: 'green', name: 'Esmeralda', hex: '#10b981', description: 'Blindagem verde de suporte' },
+  { id: 'yellow', name: 'Dourado', hex: '#f59e0b', description: 'Blindagem dourada cinética' },
+  { id: 'purple', name: 'Ametista', hex: '#8b5cf6', description: 'Blindagem púrpura de pulso' },
+  { id: 'cyan', name: 'Ciano', hex: '#06b6d4', description: 'Blindagem criogênica avançada' }
+];
 
 export const PLAYER_COLORS = [
   '#ef4444', // Red

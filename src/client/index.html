@@ -282,68 +282,184 @@
       padding: 9px 12px;
     }
 
-    /* Technical Arena Selection List */
-    .arena-table {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    /* Form Labels & Controls */
+    .form-label {
+      display: block;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text-main);
+      text-transform: uppercase;
+      margin-bottom: 8px;
     }
 
-    .arena-row {
+    .btn-cta {
+      width: 100%;
+      padding: 13px 18px;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+      font-weight: 700;
+    }
+
+    /* Technical Arena Selection Grid */
+    .arena-grid {
       display: grid;
-      grid-template-columns: 100px 180px 1fr 100px;
-      align-items: center;
-      padding: 12px 16px;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+
+    .arena-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 14px;
       background-color: var(--bg-main);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius);
       cursor: pointer;
       transition: border-color 0.15s ease, background-color 0.15s ease;
+      user-select: none;
     }
 
-    .arena-row:hover {
+    .arena-card:hover {
       background-color: var(--bg-surface-hover);
       border-color: var(--border-active);
     }
 
-    .arena-row.selected {
+    .arena-card.selected {
       border-color: var(--accent);
       background-color: var(--bg-surface);
     }
 
-    .arena-id {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--text-muted);
+    .arena-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .arena-row.selected .arena-id {
-      color: var(--accent);
-      font-weight: 600;
-    }
-
-    .arena-name {
-      font-family: 'Space Grotesk', sans-serif;
-      font-weight: 600;
-      font-size: 0.95rem;
-      letter-spacing: -0.02em;
-    }
-
-    .arena-mechanic {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    .arena-status {
+    .arena-card-id {
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.72rem;
-      text-align: right;
       color: var(--text-muted);
     }
 
-    .arena-row.selected .arena-status {
+    .arena-card.selected .arena-card-id {
       color: var(--accent);
+      font-weight: 600;
+    }
+
+    .arena-card-status {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .arena-card.selected .arena-card-status {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .arena-card-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 0.92rem;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+
+    .arena-card-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    /* Character Skin Picker */
+    .skin-picker-container {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .avatar-preview-box {
+      width: 68px;
+      height: 68px;
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .avatar-preview-box canvas {
+      width: 56px;
+      height: 56px;
+      aspect-ratio: 1 / 1;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .skin-chips-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    @media (max-width: 520px) {
+      .skin-chips-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .skin-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background-color: var(--bg-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+      user-select: none;
+    }
+
+    .skin-chip:hover {
+      border-color: var(--border-active);
+      color: var(--text-main);
+    }
+
+    .skin-chip.selected {
+      border-color: var(--accent);
+      background-color: var(--bg-surface-hover);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .skin-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Backward compatibility fallback */
+    .arena-row {
+      display: none;
     }
 
     /* Rooms technical table */
@@ -511,7 +627,7 @@
       overflow: hidden;
     }
 
-    canvas {
+    #game-canvas {
       width: min(100cqw, calc(100cqh * 720 / 624));
       height: min(100cqh, calc(100cqw * 624 / 720));
       aspect-ratio: 720 / 624;
@@ -875,12 +991,38 @@
       .header-inner {
         padding: 10px 14px;
       }
-      .arena-row {
-        grid-template-columns: 80px 1fr;
-        gap: 6px;
+      .hero-frame {
+        margin-bottom: 12px;
       }
-      .arena-mechanic, .arena-status {
-        grid-column: span 2;
+      .hero-frame img {
+        max-height: 110px;
+      }
+      .hero-caption {
+        padding: 7px 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
+      .hero-caption-text {
+        font-size: 0.78rem;
+      }
+      .hero-caption-sub {
+        font-size: 0.68rem;
+      }
+      .panel {
+        padding: 12px 14px;
+        margin-bottom: 12px;
+      }
+      .skin-picker-container {
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .arena-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .arena-card {
+        padding: 10px 12px;
       }
       body.in-game #hud,
       body.is-fullscreen #hud {
@@ -993,7 +1135,7 @@
         <img src="/assets/banner.jpg" alt="Visão Geral do Torneio">
         <div class="hero-caption">
           <div class="hero-caption-text">Protocolo de Batalha com Colapso Perimetral Contínuo</div>
-          <div class="hero-caption-sub">Grid 15x13 • 30 Ticks/s</div>
+          <div class="hero-caption-sub">Partidas de 60s • Colapso aos 20s • Grid 15x13</div>
         </div>
       </div>
 
@@ -1003,83 +1145,140 @@
         <button id="btn-dismiss-notice" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem;">Fechar</button>
       </div>
 
-      <!-- Player & Quick Action Panel -->
+      <!-- Battle Setup: Operator & Customization -->
       <div class="panel">
         <div class="panel-header">
-          <span class="panel-title">Configuração do Jogador</span>
-          <span class="panel-meta">Identificação de Sessão</span>
+          <span class="panel-title">Configuração do Operador</span>
+          <span class="panel-meta">Customização & Arena</span>
         </div>
-        <div class="form-row">
-          <input type="text" id="input-name" placeholder="Informe seu identificador..." maxlength="14" value="Operador_01">
-          <button id="btn-quick-play" class="btn btn-primary">
-            Iniciar Partida Rápida
-          </button>
+
+        <div style="margin-bottom: 14px;">
+          <label class="form-label">Identificador do Jogador</label>
+          <input type="text" id="input-name" placeholder="Informe seu identificador..." maxlength="14" value="Operador_01" style="width: 100%;">
         </div>
+
+        <div>
+          <label class="form-label">Blindagem do Personagem</label>
+          <div class="skin-picker-container">
+            <div class="avatar-preview-box">
+              <canvas id="avatar-preview-canvas" width="64" height="64"></canvas>
+            </div>
+            <div class="skin-chips-grid" id="skin-chips-container">
+              <div class="skin-chip selected" data-color="#3b82f6">
+                <span class="skin-dot" style="background-color: #3b82f6;"></span>
+                <span>Cobalto</span>
+              </div>
+              <div class="skin-chip" data-color="#ef4444">
+                <span class="skin-dot" style="background-color: #ef4444;"></span>
+                <span>Carmesim</span>
+              </div>
+              <div class="skin-chip" data-color="#10b981">
+                <span class="skin-dot" style="background-color: #10b981;"></span>
+                <span>Esmeralda</span>
+              </div>
+              <div class="skin-chip" data-color="#f59e0b">
+                <span class="skin-dot" style="background-color: #f59e0b;"></span>
+                <span>Dourado</span>
+              </div>
+              <div class="skin-chip" data-color="#8b5cf6">
+                <span class="skin-dot" style="background-color: #8b5cf6;"></span>
+                <span>Ametista</span>
+              </div>
+              <div class="skin-chip" data-color="#06b6d4">
+                <span class="skin-dot" style="background-color: #06b6d4;"></span>
+                <span>Ciano</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Arena de Combate</label>
+          <div class="arena-grid">
+            <div class="arena-card selected" data-arena="ruins">
+              <div class="arena-card-top">
+                <span class="arena-card-id">ARENA-01</span>
+                <span class="arena-card-status">
+                  <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color: var(--accent);"></span>
+                  Ativa
+                </span>
+              </div>
+              <div class="arena-card-name">Ruínas da Arena</div>
+              <div class="arena-card-desc">Clássico equilibrado, 65% de blocos destrutíveis e rotas simétricas.</div>
+            </div>
+
+            <div class="arena-card" data-arena="cryo">
+              <div class="arena-card-top">
+                <span class="arena-card-id">ARENA-02</span>
+                <span class="arena-card-status">Disponível</span>
+              </div>
+              <div class="arena-card-name">Laboratório Criogênico</div>
+              <div class="arena-card-desc">Placas de gelo de baixa fricção, esteiras aceleradoras e portais quânticos.</div>
+            </div>
+
+            <div class="arena-card" data-arena="foundry">
+              <div class="arena-card-top">
+                <span class="arena-card-id">ARENA-03</span>
+                <span class="arena-card-status">Disponível</span>
+              </div>
+              <div class="arena-card-name">Fundição Industrial</div>
+              <div class="arena-card-desc">Esteiras contínuas que deslocam operadores e bombas + barris voláteis TNT.</div>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-quick-play" class="btn btn-primary btn-cta" style="margin-top: 18px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          INICIAR PARTIDA RÁPIDA (1 MIN)
+        </button>
       </div>
 
-      <!-- Arena Selection List -->
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Seleção de Arena</span>
-          <span class="panel-meta">3 Ambientes Procedurais</span>
+      <!-- Secondary Multiplayer Panel (Collapsible / Clean) -->
+      <div class="panel" style="margin-top: 16px;">
+        <div class="panel-header" id="header-multiplayer-toggle" style="cursor: pointer; user-select: none;">
+          <span class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            Sessões Multiplayer Online
+          </span>
+          <span class="panel-meta" id="multiplayer-status-badge">Salas Privadas</span>
         </div>
-        <div class="arena-table">
-          <div class="arena-row selected" data-arena="ruins">
-            <span class="arena-id">ARENA-01</span>
-            <span class="arena-name">Ruínas da Arena</span>
-            <span class="arena-mechanic">Clássico equilibrado, 65% de blocos destrutíveis e rotas simétricas.</span>
-            <span class="arena-status">Selecionada</span>
+        <div id="multiplayer-container-body">
+          <div class="form-row">
+            <button id="btn-create-room" class="btn btn-secondary">
+              Criar Nova Sala
+            </button>
+            <input type="text" id="input-room-code" placeholder="Código da sala (ex: BOMB-8421)">
+            <button id="btn-join-room" class="btn btn-secondary">
+              Conectar à Sala
+            </button>
           </div>
-          <div class="arena-row" data-arena="cryo">
-            <span class="arena-id">ARENA-02</span>
-            <span class="arena-name">Laboratório Criogênico</span>
-            <span class="arena-mechanic">Placas de gelo de baixa fricção, esteiras aceleradoras e portais quânticos.</span>
-            <span class="arena-status">Disponível</span>
-          </div>
-          <div class="arena-row" data-arena="foundry">
-            <span class="arena-id">ARENA-03</span>
-            <span class="arena-name">Fundição Industrial</span>
-            <span class="arena-mechanic">Esteiras contínuas que deslocam operadores e bombas + barris voláteis TNT.</span>
-            <span class="arena-status">Disponível</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Multiplayer Sessions Panel -->
-      <div class="panel">
-        <div class="panel-header">
-          <span class="panel-title">Sessões Multiplayer</span>
-          <span class="panel-meta">WebSockets / Bots Locais</span>
-        </div>
-        <div class="form-row">
-          <button id="btn-create-room" class="btn btn-secondary">
-            Criar Nova Sala
-          </button>
-          <input type="text" id="input-room-code" placeholder="Código da sala (ex: BOMB-8421)">
-          <button id="btn-join-room" class="btn btn-secondary">
-            Conectar à Sala
-          </button>
-        </div>
-
-        <div style="margin-top: 14px;">
-          <table class="rooms-table">
-            <thead>
-              <tr>
-                <th>IDENTIFICADOR</th>
-                <th>ARENA</th>
-                <th>OCUPAÇÃO</th>
-                <th>STATUS</th>
-                <th style="text-align: right;">AÇÃO</th>
-              </tr>
-            </thead>
-            <tbody id="rooms-list-container">
-              <tr>
-                <td colspan="5" style="color: var(--text-muted); font-style: italic; padding: 14px 12px;">
-                  Nenhuma sessão pública ativa na rede no momento.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div style="margin-top: 14px; overflow-x: auto;">
+            <table class="rooms-table">
+              <thead>
+                <tr>
+                  <th>IDENTIFICADOR</th>
+                  <th>ARENA</th>
+                  <th>OCUPAÇÃO</th>
+                  <th>STATUS</th>
+                  <th style="text-align: right;">AÇÃO</th>
+                </tr>
+              </thead>
+              <tbody id="rooms-list-container">
+                <tr>
+                  <td colspan="5" style="color: var(--text-muted); font-style: italic; padding: 14px 12px;">
+                    Nenhuma sessão pública ativa na rede no momento.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
