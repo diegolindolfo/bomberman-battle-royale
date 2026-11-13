@@ -167,8 +167,9 @@ class BombermanApp {
     this.soundFx.setSuddenDeathMusic(false);
     this.prevMyAlive = true;
     this.prevPowerUps = null;
+    document.body.classList.remove('is-game-over');
     document.getElementById('spectator-bar')?.classList.remove('active');
-    document.getElementById('modal-gameover')?.classList.remove('active');
+    document.getElementById('gameover-bar')?.classList.remove('active');
   }
 
   private updateConnectionIndicator(connected: boolean): void {
@@ -429,8 +430,8 @@ class BombermanApp {
     const me = this.localState.addPlayer('player_local', playerName, false, playerColor);
     this.myPlayerId = me.id;
 
-    // Add 3 Tactical & Aggressive AI Bots
-    const botNames = ['MechaBomber', 'CyberBot', 'DynamiteAI'];
+    // Add 3 Distinct AI Bots: Defensivo, Ataque, Estrategista
+    const botNames = ['Sentinela', 'Vanguarda', 'Estrategista'];
     for (let i = 0; i < 3; i++) {
       const botId = `bot_local_${i + 1}`;
       const botPlayer = this.localState.addPlayer(botId, botNames[i], true);
@@ -507,7 +508,7 @@ class BombermanApp {
 
     if (snapshot.phase === 'game_over') {
       document.getElementById('spectator-bar')?.classList.remove('active');
-      this.showGameOverModal(snapshot);
+      this.showGameOverBar(snapshot);
     }
   }
 
@@ -716,19 +717,17 @@ class BombermanApp {
     }
   }
 
-  private showGameOverModal(snapshot: GameSnapshot): void {
-    const modal = document.getElementById('modal-gameover');
-    if (!modal || modal.classList.contains('active')) return;
+  private showGameOverBar(snapshot: GameSnapshot): void {
+    const bar = document.getElementById('gameover-bar');
+    if (!bar || bar.classList.contains('active')) return;
 
-    modal.classList.add('active');
+    bar.classList.add('active');
+    document.body.classList.add('is-game-over');
     this.soundFx.stopBattleMusic();
 
-    const titleEl = document.getElementById('modal-title');
-    const winnerEl = document.getElementById('modal-winner');
-    const statsEl = document.getElementById('modal-stats');
-    const winnerCard = document.getElementById('modal-winner-card');
-    const winnerCanvas = document.getElementById('modal-winner-canvas') as HTMLCanvasElement | null;
-    const winnerNameEl = document.getElementById('modal-winner-name');
+    const badgeEl = document.getElementById('gameover-badge');
+    const titleEl = document.getElementById('gameover-title');
+    const subEl = document.getElementById('gameover-sub');
     const playAgainBtn = document.getElementById('btn-play-again') as HTMLButtonElement | null;
 
     if (playAgainBtn) {
@@ -739,33 +738,28 @@ class BombermanApp {
     const isMeWinner = winner && winner.id === this.myPlayerId;
     const me = snapshot.players.find(p => p.id === this.myPlayerId);
 
-    if (winner) {
-      if (winnerCard) winnerCard.style.display = 'flex';
-      if (winnerNameEl) winnerNameEl.textContent = `${winner.name} (${winner.kills} abate${winner.kills === 1 ? '' : 's'})`;
-      if (winnerCanvas) {
-        Sprites.drawVictoryAvatar(winnerCanvas, winner.color);
-      }
-    } else {
-      if (winnerCard) winnerCard.style.display = 'none';
-    }
-
     if (isMeWinner) {
       this.soundFx.playVictory();
-      if (titleEl) titleEl.textContent = 'Vitória Confirmada';
-      if (winnerEl) winnerEl.textContent = 'Você prevaleceu como único sobrevivente da arena.';
+      if (badgeEl) {
+        badgeEl.textContent = 'VITÓRIA';
+        badgeEl.classList.remove('draw');
+      }
+      if (titleEl) titleEl.textContent = winner.name;
+      if (subEl) subEl.textContent = `${winner.kills} abate${winner.kills === 1 ? '' : 's'} • ${this.getArenaShortLabel(snapshot.arena)}`;
     } else if (winner) {
-      if (titleEl) titleEl.textContent = 'Partida Encerrada';
-      if (winnerEl) winnerEl.textContent = `Vencedor: ${winner.name} (${winner.kills} abate${winner.kills === 1 ? '' : 's'}).`;
+      if (badgeEl) {
+        badgeEl.textContent = 'CAMPEÃO';
+        badgeEl.classList.remove('draw');
+      }
+      if (titleEl) titleEl.textContent = winner.name;
+      if (subEl) subEl.textContent = `${winner.kills} abate${winner.kills === 1 ? '' : 's'} • Seus abates: ${me?.kills ?? 0}`;
     } else {
-      if (titleEl) titleEl.textContent = 'Empate Técnico';
-      if (winnerEl) winnerEl.textContent = 'Nenhum operador sobreviveu à detonação final.';
-    }
-
-    if (statsEl) {
-      const myKills = me ? me.kills : 0;
-      const arenaLabel = this.getArenaShortLabel(snapshot.arena);
-      const colapsoLabel = snapshot.suddenDeathActive ? 'COLAPSO ATIVO' : 'TEMPO REGULAR';
-      statsEl.textContent = `SEUS ABATES: ${myKills} • ARENA: ${arenaLabel} • ${colapsoLabel}`;
+      if (badgeEl) {
+        badgeEl.textContent = 'EMPATE';
+        badgeEl.classList.add('draw');
+      }
+      if (titleEl) titleEl.textContent = 'Sem Sobreviventes';
+      if (subEl) subEl.textContent = `Seus abates: ${me?.kills ?? 0} • ${this.getArenaShortLabel(snapshot.arena)}`;
     }
   }
 

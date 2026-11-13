@@ -23,11 +23,11 @@ interface PathNode {
 export class BotAI {
   private botId: string;
   private personality: BotPersonality;
-  private reactionTimer: number = 0; // Humanized reaction window (150ms - 280ms)
+  private reactionTimer: number = 0; // Humanized reaction window
   private currentPathStep: Point | null = null;
   private actionCooldown: number = 0;
 
-  constructor(botId: string, personality: BotPersonality = 'tactical') {
+  constructor(botId: string, personality: BotPersonality = 'strategist') {
     this.botId = botId;
     this.personality = personality;
     this.resetReactionTimer();
@@ -40,8 +40,16 @@ export class BotAI {
   }
 
   private resetReactionTimer(): void {
-    // Humanized reaction window between 150ms and 280ms
-    this.reactionTimer = 0.15 + Math.random() * 0.13;
+    if (this.personality === 'aggressive') {
+      // Fast, reactive hunter (110ms - 200ms)
+      this.reactionTimer = 0.11 + Math.random() * 0.09;
+    } else if (this.personality === 'defensive') {
+      // Cautious, steady pacing (180ms - 280ms)
+      this.reactionTimer = 0.18 + Math.random() * 0.10;
+    } else {
+      // Strategist balanced deliberation (140ms - 230ms)
+      this.reactionTimer = 0.14 + Math.random() * 0.09;
+    }
   }
 
   public computeInput(state: GameState, dt: number): PlayerInput {
@@ -83,11 +91,11 @@ export class BotAI {
       }
     }
 
-    // Immediate emergency reaction when in danger, or regular tactical decision window
+    // Immediate emergency reaction when in danger, or regular decision window
     if (isCurrentlyInDanger || (this.reactionTimer <= 0 && !this.currentPathStep) || this.reactionTimer <= -0.15) {
       this.resetReactionTimer();
 
-      // --- HIERARQUIA 1: SOBREVIVÊNCIA (Evade) ---
+      // --- HIERARQUIA 1 (COMUM): SOBREVIVÊNCIA (Evade) ---
       if (isCurrentlyInDanger) {
         this.currentPathStep = this.findImmediateStepToSafety(state, botGx, botGy, dangerTimers, bot.powerUps.speed);
         if (this.currentPathStep) {
@@ -101,60 +109,140 @@ export class BotAI {
         bot.activeBombs < bot.powerUps.bombLimit &&
         !state.bombs.some(b => b.gx === botGx && b.gy === botGy);
 
-      if (this.personality === 'tactical') {
-        // --- HIERARQUIA 2 (Tactical): COLETA (Farm visible safe power-ups) ---
+      if (this.personality === 'defensive') {
+        // --- PERFIL DEFENSIVO: Controle de zona segura, escudo/velocidade e baixo risco ---
+        // 1. Retreats inward early before Sudden Death traps outer ring
+        const onOuterPerimeter = botGx <= 2 || botGx >= GRID_COLS - 3 || botGy <= 2 || botGy >= GRID_ROWS - 3;
+        if ((state.suddenDeathActive || state.timer <= 15) && onOuterPerimeter) {
+          const inwardStep = this.findStepTowardSafeCenter(state, botGx, botGy, dangerTimers);
+          if (inwardStep) {
+            this.currentPathStep = inwardStep;
+            return this.moveTowardTile(bot, inwardStep.gx, inwardStep.gy, false);
+          }
+        }
+
+        // 2. Prioritizes defensive & survival power-ups (Shield > Speed > Kick)
         if (state.powerUps.length > 0) {
-          const farmStep = this.findStepTowardPowerUp(state, botGx, botGy, dangerTimers, 14);
+          const farmStep = this.findStepTowardPowerUp(
+            state,
+            botGx,
+            botGy,
+            dangerTimers,
+            11,
+            [PowerUpType.SHIELD, PowerUpType.SPEED_UP, PowerUpType.BOMB_KICK]
+          );
           if (farmStep) {
             this.currentPathStep = farmStep;
             return this.moveTowardTile(bot, farmStep.gx, farmStep.gy, false);
           }
         }
 
-        // --- HIERARQUIA 3: ATAQUE / EXPANSÃO (Anti-Suicide Lookahead) ---
+        // 3. Only drops bomb with strict safety margin (1.65s) and safe cover
         if (canDropBomb) {
-          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers);
+          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers, 1.65, true);
           if (escapeStep) {
-            this.actionCooldown = 1.35;
+            this.actionCooldown = 1.65;
             this.currentPathStep = escapeStep;
             return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
           }
         }
 
-        const engageStep =
-          this.findStepTowardEnemy(state, botGx, botGy, dangerTimers) ??
-          this.findStepTowardBreakableBlock(state, botGx, botGy, dangerTimers);
-
-        if (engageStep) {
-          this.currentPathStep = engageStep;
-          return this.moveTowardTile(bot, engageStep.gx, engageStep.gy, false);
+        // 4. Keeps comfortable distance from aggressive enemies or opens safe crates
+        const keepAwayStep = this.findDefensiveSpacingStep(state, botGx, botGy, dangerTimers);
+        if (keepAwayStep) {
+          this.currentPathStep = keepAwayStep;
+          return this.moveTowardTile(bot, keepAwayStep.gx, keepAwayStep.gy, false);
         }
-      } else {
-        // Aggressive bot: pressures enemies & clears crates aggressively, farms nearby upgrades
+
+        const safeExpandStep = this.findStepTowardBreakableBlock(state, botGx, botGy, dangerTimers, true);
+        if (safeExpandStep) {
+          this.currentPathStep = safeExpandStep;
+          return this.moveTowardTile(bot, safeExpandStep.gx, safeExpandStep.gy, false);
+        }
+      } else if (this.personality === 'aggressive') {
+        // --- PERFIL ATAQUE: Pressão constante, caça direta aos oponentes e ritmo acelerado ---
         if (canDropBomb) {
-          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers);
+          const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers, 1.80, false);
           if (escapeStep) {
-            this.actionCooldown = 1.15;
+            this.actionCooldown = 0.85;
             this.currentPathStep = escapeStep;
             return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
           }
         }
 
+        // 1. Hunts nearest reachable enemy immediately
+        const huntStep = this.findStepTowardEnemy(state, botGx, botGy, dangerTimers);
+        if (huntStep) {
+          this.currentPathStep = huntStep;
+          return this.moveTowardTile(bot, huntStep.gx, huntStep.gy, false);
+        }
+
+        // 2. Grabs nearby offensive upgrades along the route
         if (state.powerUps.length > 0) {
-          const nearbyFarm = this.findStepTowardPowerUp(state, botGx, botGy, dangerTimers, 5);
+          const nearbyFarm = this.findStepTowardPowerUp(
+            state,
+            botGx,
+            botGy,
+            dangerTimers,
+            5,
+            [PowerUpType.FIRE_UP, PowerUpType.BOMB_UP, PowerUpType.SPEED_UP]
+          );
           if (nearbyFarm) {
             this.currentPathStep = nearbyFarm;
             return this.moveTowardTile(bot, nearbyFarm.gx, nearbyFarm.gy, false);
           }
         }
 
-        const engageStep =
-          this.findStepTowardEnemy(state, botGx, botGy, dangerTimers) ??
-          this.findStepTowardBreakableBlock(state, botGx, botGy, dangerTimers);
+        // 3. Blasts directly through crates along shortest path toward closest opponent
+        const breachStep = this.findStepTowardBreakableBlock(state, botGx, botGy, dangerTimers, false);
+        if (breachStep) {
+          this.currentPathStep = breachStep;
+          return this.moveTowardTile(bot, breachStep.gx, breachStep.gy, false);
+        }
+      } else {
+        // --- PERFIL ESTRATEGISTA: Maximiza multi-blocos, barris voláteis, armadilhas e power-ups ---
+        // 1. Wide tactical farm prioritizing Fire, Bomb, Kick, Shield
+        if (state.powerUps.length > 0) {
+          const farmStep = this.findStepTowardPowerUp(
+            state,
+            botGx,
+            botGy,
+            dangerTimers,
+            16,
+            [PowerUpType.FIRE_UP, PowerUpType.BOMB_UP, PowerUpType.BOMB_KICK, PowerUpType.SHIELD]
+          );
+          if (farmStep) {
+            this.currentPathStep = farmStep;
+            return this.moveTowardTile(bot, farmStep.gx, farmStep.gy, false);
+          }
+        }
 
-        if (engageStep) {
-          this.currentPathStep = engageStep;
-          return this.moveTowardTile(bot, engageStep.gx, engageStep.gy, false);
+        // 2. Drop bomb if current tile offers high tactical value (multi-crate, volatile chain, or enemy line)
+        if (canDropBomb) {
+          const score = this.evaluateStrategicTileScore(state, bot, botGx, botGy);
+          const bestNearbyTile = this.findStepTowardBestStrategicTile(state, bot, botGx, botGy, dangerTimers);
+          // Drop immediately if current position is already high-value (>=2) or hits an enemy, or no higher spot is nearby
+          if (score >= 2 || !bestNearbyTile) {
+            const escapeStep = this.checkSafeBombPlacement(state, bot, botGx, botGy, dangerTimers, 1.85, false);
+            if (escapeStep) {
+              this.actionCooldown = 1.25;
+              this.currentPathStep = escapeStep;
+              return { ...this.moveTowardTile(bot, escapeStep.gx, escapeStep.gy, false), placeBomb: true };
+            }
+          } else {
+            this.currentPathStep = bestNearbyTile;
+            return this.moveTowardTile(bot, bestNearbyTile.gx, bestNearbyTile.gy, false);
+          }
+        }
+
+        const strategicStep =
+          this.findStepTowardBestStrategicTile(state, bot, botGx, botGy, dangerTimers) ??
+          this.findStepTowardEnemy(state, botGx, botGy, dangerTimers) ??
+          this.findStepTowardBreakableBlock(state, botGx, botGy, dangerTimers, false);
+
+        if (strategicStep) {
+          this.currentPathStep = strategicStep;
+          return this.moveTowardTile(bot, strategicStep.gx, strategicStep.gy, false);
         }
       }
     }
@@ -470,7 +558,9 @@ export class BotAI {
     bot: PlayerState,
     gx: number,
     gy: number,
-    danger: number[][]
+    danger: number[][],
+    maxEscapeSec: number = 1.85,
+    requireMultiExit: boolean = false
   ): Point | null {
     // Only drop offensive bombs when currently safe & near tile center
     if (danger[gy]?.[gx] !== Infinity) return null;
@@ -507,12 +597,16 @@ export class BotAI {
         }
       }
 
-      // Check blast rays for unobstructed enemy
       const blastCells = this.computeBombBlastTiles(state.grid, gx, gy, bot.powerUps.fireRange);
       if (enemyCoords.some(e => blastCells.some(c => c.gx === e.gx && c.gy === e.gy))) {
         hasTarget = true;
       } else if (
         this.personality === 'aggressive' &&
+        enemyCoords.some(e => Math.abs(e.gx - gx) + Math.abs(e.gy - gy) <= 3)
+      ) {
+        hasTarget = true;
+      } else if (
+        this.personality === 'strategist' &&
         enemyCoords.some(e => Math.abs(e.gx - gx) + Math.abs(e.gy - gy) <= 2)
       ) {
         hasTarget = true;
@@ -521,12 +615,32 @@ export class BotAI {
 
     if (!hasTarget) return null;
 
-    // Simulate danger grid adding our bomb (reserve 0.45s margin against reaction + cornering)
+    // Simulate danger grid adding our bomb
     const simDanger = danger.map(row => [...row]);
     this.markBombDanger(simDanger, state.grid, gx, gy, bot.powerUps.fireRange, BOMB_FUSE_TIME - 0.3);
 
-    // Require an actual SAFE (Infinity) tile reachable strictly within 1.85s
-    const escapeStep = this.findImmediateStepToSafety(state, gx, gy, simDanger, bot.powerUps.speed, 1.85);
+    // Defensive bots avoid trapping themselves into 1-way dead-ends
+    if (requireMultiExit) {
+      const safeNeighbors = neighbors.filter(
+        n => this.isTileWalkableForBot(state, n.gx, n.gy) && simDanger[n.gy][n.gx] >= 0.40
+      );
+      if (safeNeighbors.length < 1) return null;
+    }
+
+    const escapeStep = this.findImmediateStepToSafety(state, gx, gy, simDanger, bot.powerUps.speed, maxEscapeSec);
+    if (!escapeStep) return null;
+
+    if (requireMultiExit) {
+      // Confirm escape direction has at least 2 walkable exits once cleared so defensive bot isn't easily cornered
+      const exitsFromEscape = [
+        { gx: escapeStep.gx, gy: escapeStep.gy - 1 },
+        { gx: escapeStep.gx, gy: escapeStep.gy + 1 },
+        { gx: escapeStep.gx - 1, gy: escapeStep.gy },
+        { gx: escapeStep.gx + 1, gy: escapeStep.gy }
+      ].filter(n => this.isTileWalkableForBot(state, n.gx, n.gy)).length;
+      if (exitsFromEscape < 2) return null;
+    }
+
     return escapeStep;
   }
 
@@ -535,10 +649,11 @@ export class BotAI {
     botGx: number,
     botGy: number,
     danger: number[][],
-    maxDist: number
+    maxDist: number,
+    priorityOrder: PowerUpType[] = []
   ): Point | null {
     let bestStep: Point | null = null;
-    let bestDist = Infinity;
+    let bestScore = Infinity;
 
     for (const p of state.powerUps) {
       // Never intentionally pursue Skull curse!
@@ -546,12 +661,158 @@ export class BotAI {
       if (danger[p.gy]?.[p.gx] !== Infinity) continue;
 
       const res = this.bfsToDestination(state, botGx, botGy, p.gx, p.gy, danger, 0, maxDist);
-      if (res && res.dist < bestDist) {
-        bestDist = res.dist;
-        bestStep = res.step;
+      if (res) {
+        const prioIdx = priorityOrder.indexOf(p.type);
+        const prioBonus = prioIdx >= 0 ? (priorityOrder.length - prioIdx) * 1.4 : 0;
+        const score = res.dist - prioBonus;
+        if (score < bestScore) {
+          bestScore = score;
+          bestStep = res.step;
+        }
       }
     }
     return bestStep;
+  }
+
+  private findStepTowardSafeCenter(
+    state: GameState,
+    botGx: number,
+    botGy: number,
+    danger: number[][]
+  ): Point | null {
+    const cx = Math.floor(GRID_COLS / 2);
+    const cy = Math.floor(GRID_ROWS / 2);
+    const res = this.bfsToDestination(state, botGx, botGy, cx, cy, danger, 2, 16);
+    return res ? res.step : null;
+  }
+
+  private findDefensiveSpacingStep(
+    state: GameState,
+    botGx: number,
+    botGy: number,
+    danger: number[][]
+  ): Point | null {
+    let tooCloseEnemy: Point | null = null;
+    let closestDist = Infinity;
+
+    for (const p of state.players.values()) {
+      if (p.id !== this.botId && p.alive) {
+        const egx = Math.floor(p.x / TILE_SIZE);
+        const egy = Math.floor(p.y / TILE_SIZE);
+        const d = Math.abs(egx - botGx) + Math.abs(egy - botGy);
+        if (d <= 2 && d < closestDist) {
+          closestDist = d;
+          tooCloseEnemy = { gx: egx, gy: egy };
+        }
+      }
+    }
+
+    if (!tooCloseEnemy) return null;
+
+    const neighbors = [
+      { gx: botGx, gy: botGy - 1 },
+      { gx: botGx, gy: botGy + 1 },
+      { gx: botGx - 1, gy: botGy },
+      { gx: botGx + 1, gy: botGy }
+    ];
+
+    let bestTile: Point | null = null;
+    let bestScore = -Infinity;
+    const cx = Math.floor(GRID_COLS / 2);
+    const cy = Math.floor(GRID_ROWS / 2);
+
+    for (const n of neighbors) {
+      if (!this.isTileWalkableForBot(state, n.gx, n.gy)) continue;
+      if (danger[n.gy][n.gx] !== Infinity) continue;
+
+      const enemyDist = Math.abs(n.gx - tooCloseEnemy.gx) + Math.abs(n.gy - tooCloseEnemy.gy);
+      const centerBonus = -(Math.abs(n.gx - cx) + Math.abs(n.gy - cy)) * 0.25;
+      const score = enemyDist + centerBonus;
+      if (score > bestScore) {
+        bestScore = score;
+        bestTile = n;
+      }
+    }
+    return bestTile;
+  }
+
+  private evaluateStrategicTileScore(
+    state: GameState,
+    bot: PlayerState,
+    gx: number,
+    gy: number
+  ): number {
+    const blastCells = this.computeBombBlastTiles(state.grid, gx, gy, bot.powerUps.fireRange);
+    let score = 0;
+
+    for (const c of blastCells) {
+      const tile = state.grid[c.gy]?.[c.gx];
+      if (tile === TileType.SOFT_BLOCK) score += 1;
+      else if (tile === TileType.VOLATILE_BLOCK) score += 2.5;
+    }
+
+    for (const p of state.players.values()) {
+      if (p.id !== this.botId && p.alive) {
+        const egx = Math.floor(p.x / TILE_SIZE);
+        const egy = Math.floor(p.y / TILE_SIZE);
+        if (blastCells.some(c => c.gx === egx && c.gy === egy)) {
+          score += 3;
+        } else if (Math.abs(egx - gx) + Math.abs(egy - gy) <= 2) {
+          score += 1.5;
+        }
+      }
+    }
+
+    return score;
+  }
+
+  private findStepTowardBestStrategicTile(
+    state: GameState,
+    bot: PlayerState,
+    startGx: number,
+    startGy: number,
+    danger: number[][]
+  ): Point | null {
+    const queue: PathNode[] = [{ gx: startGx, gy: startGy, parent: null, dist: 0 }];
+    const visited = new Set<string>([`${startGx},${startGy}`]);
+
+    let bestCandidate: PathNode | null = null;
+    let bestValue = -Infinity;
+
+    while (queue.length > 0 && visited.size < 120) {
+      const cur = queue.shift()!;
+
+      if (cur.dist > 0 && cur.dist <= 7) {
+        const tileScore = this.evaluateStrategicTileScore(state, bot, cur.gx, cur.gy);
+        if (tileScore >= 2) {
+          const value = tileScore * 2.2 - cur.dist;
+          if (value > bestValue) {
+            bestValue = value;
+            bestCandidate = cur;
+          }
+        }
+      }
+
+      if (cur.dist >= 7) continue;
+
+      const neighbors = [
+        { gx: cur.gx, gy: cur.gy - 1 },
+        { gx: cur.gx, gy: cur.gy + 1 },
+        { gx: cur.gx - 1, gy: cur.gy },
+        { gx: cur.gx + 1, gy: cur.gy }
+      ];
+
+      for (const n of neighbors) {
+        const key = `${n.gx},${n.gy}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (!this.isTileWalkableForBot(state, n.gx, n.gy)) continue;
+        if (danger[n.gy][n.gx] !== Infinity) continue;
+        queue.push({ gx: n.gx, gy: n.gy, parent: cur, dist: cur.dist + 1 });
+      }
+    }
+
+    return bestCandidate ? this.getFirstStepFromPath(bestCandidate, startGx, startGy) : null;
   }
 
   private findStepTowardEnemy(
@@ -584,28 +845,31 @@ export class BotAI {
 
   /**
    * When direct corridors to opponents are sealed by SOFT_BLOCKs (such as at match start),
-   * find the nearest safe walkable tile adjacent to a destructible block biased toward enemies.
+   * find the nearest safe walkable tile adjacent to a destructible block.
+   * Aggressive/Strategist bias toward enemies; Defensive biases toward safe central lanes.
    */
   private findStepTowardBreakableBlock(
     state: GameState,
     startGx: number,
     startGy: number,
-    danger: number[][]
+    danger: number[][],
+    preferCenterSafety: boolean = false
   ): Point | null {
-    // Reference goal = closest alive opponent (or arena center)
     let goalX = Math.floor(GRID_COLS / 2);
     let goalY = Math.floor(GRID_ROWS / 2);
-    let bestEnemyDist = Infinity;
 
-    for (const p of state.players.values()) {
-      if (p.id !== this.botId && p.alive) {
-        const egx = Math.floor(p.x / TILE_SIZE);
-        const egy = Math.floor(p.y / TILE_SIZE);
-        const d = Math.abs(egx - startGx) + Math.abs(egy - startGy);
-        if (d < bestEnemyDist) {
-          bestEnemyDist = d;
-          goalX = egx;
-          goalY = egy;
+    if (!preferCenterSafety) {
+      let bestEnemyDist = Infinity;
+      for (const p of state.players.values()) {
+        if (p.id !== this.botId && p.alive) {
+          const egx = Math.floor(p.x / TILE_SIZE);
+          const egy = Math.floor(p.y / TILE_SIZE);
+          const d = Math.abs(egx - startGx) + Math.abs(egy - startGy);
+          if (d < bestEnemyDist) {
+            bestEnemyDist = d;
+            goalX = egx;
+            goalY = egy;
+          }
         }
       }
     }

@@ -2,6 +2,7 @@ import {
   ArenaTheme,
   BlockBreakAnimation,
   Bomb,
+  BotPersonality,
   ChainReactionEntry,
   Direction,
   Explosion,
@@ -300,7 +301,13 @@ export class GameState {
     };
   }
 
-  public addPlayer(id: string, name: string, isBot: boolean = false, customColor?: string): PlayerState {
+  public addPlayer(
+    id: string,
+    name: string,
+    isBot: boolean = false,
+    customColor?: string,
+    customPersonality?: BotPersonality
+  ): PlayerState {
     const slotIndex = this.players.size;
     const spawn = this.getSpawnPosition(slotIndex);
 
@@ -310,6 +317,10 @@ export class GameState {
       const available = PLAYER_COLORS.filter(c => !taken.has(c.toLowerCase()));
       color = available.length > 0 ? available[0] : PLAYER_COLORS[slotIndex % PLAYER_COLORS.length];
     }
+
+    const botCount = Array.from(this.players.values()).filter(p => p.isBot).length;
+    const personalities: BotPersonality[] = ['defensive', 'aggressive', 'strategist'];
+    const botPersonality = isBot ? (customPersonality ?? personalities[botCount % personalities.length]) : undefined;
 
     const player: PlayerState = {
       id,
@@ -325,7 +336,7 @@ export class GameState {
       isMoving: false,
       alive: true,
       isBot,
-      botPersonality: isBot ? (slotIndex % 2 === 0 ? 'aggressive' : 'tactical') : undefined,
+      botPersonality,
       kills: 0,
       powerUps: {
         bombLimit: BASE_BOMB_LIMIT,

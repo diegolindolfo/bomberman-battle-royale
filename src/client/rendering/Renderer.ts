@@ -57,9 +57,10 @@ export class Renderer {
 
     if (isGameOver && winner) {
       targetZoom = 2.35;
-      targetX = Math.max(110, Math.min(MAP_WIDTH - 110, winner.x));
-      targetY = Math.max(90, Math.min(MAP_HEIGHT - 90, winner.y));
-      this.particles.emitVictorySparkles(winner.x, winner.y, winner.color);
+      const halfViewW = MAP_WIDTH / (2 * targetZoom);
+      const halfViewH = MAP_HEIGHT / (2 * targetZoom);
+      targetX = Math.max(halfViewW, Math.min(MAP_WIDTH - halfViewW, winner.x));
+      targetY = Math.max(halfViewH, Math.min(MAP_HEIGHT - halfViewH, winner.y));
     }
 
     const lerpSpeed = isGameOver ? 2.8 : 4.5;

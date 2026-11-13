@@ -334,7 +334,7 @@ describe('Bomberman Battle Royale GameState Core Tests', () => {
     boxedState.addPlayer('b2', 'EnemyBot', true);
     boxedState.startGame();
 
-    const aiBoxed = new BotAI('b1', 'tactical');
+    const aiBoxed = new BotAI('b1', 'strategist');
     const dangerBoxed = aiBoxed.buildDangerGrid(boxedState);
     const simResult = aiBoxed.checkSafeBombPlacement(boxedState, boxedBot, 1, 1, dangerBoxed);
     assert.strictEqual(simResult, null, 'Bot must refuse to place bomb when no safe escape tile exists');
@@ -351,7 +351,7 @@ describe('Bomberman Battle Royale GameState Core Tests', () => {
     normalState.addPlayer('enemy', 'Opponent', true);
     normalState.startGame();
 
-    const ai = new BotAI('b_spawn', 'tactical');
+    const ai = new BotAI('b_spawn', 'strategist');
     let placedAtLeastOneBomb = false;
 
     for (let step = 0; step < 180; step++) { // ~6 seconds simulated
@@ -367,5 +367,38 @@ describe('Bomberman Battle Royale GameState Core Tests', () => {
       normalState.grid[1][3] === TileType.EMPTY || normalState.grid[3][1] === TileType.EMPTY,
       'Bot bomb should have blown open an exit path'
     );
+  });
+
+  test('GameState assigns distinct defensive, aggressive, and strategist personalities to 3 bots', async () => {
+    const { BotAI } = await import('../BotAI.js');
+    const state = new GameState('ruins');
+    state.addPlayer('human', 'Operador', false);
+    const b1 = state.addPlayer('b1', 'Sentinela', true);
+    const b2 = state.addPlayer('b2', 'Vanguarda', true);
+    const b3 = state.addPlayer('b3', 'Estrategista', true);
+
+    assert.strictEqual(b1.botPersonality, 'defensive');
+    assert.strictEqual(b2.botPersonality, 'aggressive');
+    assert.strictEqual(b3.botPersonality, 'strategist');
+
+    state.startGame();
+    const ais = [
+      new BotAI('b1', b1.botPersonality),
+      new BotAI('b2', b2.botPersonality),
+      new BotAI('b3', b3.botPersonality)
+    ];
+
+    // Simulate 5 seconds of play ensuring all 3 bots navigate safely without suiciding
+    for (let step = 0; step < 150; step++) {
+      for (const [idx, id] of ['b1', 'b2', 'b3'].entries()) {
+        const inp = ais[idx].computeInput(state, 0.033);
+        state.handleInput(id, inp);
+      }
+      state.update(0.033);
+    }
+
+    assert.strictEqual(b1.alive, true, 'Defensive bot must survive initial opening');
+    assert.strictEqual(b2.alive, true, 'Aggressive bot must survive initial opening');
+    assert.strictEqual(b3.alive, true, 'Strategist bot must survive initial opening');
   });
 });

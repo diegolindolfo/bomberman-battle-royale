@@ -42,7 +42,7 @@ export interface PlayerInput {
   placeBomb: boolean;
 }
 
-export type BotPersonality = 'aggressive' | 'tactical';
+export type BotPersonality = 'defensive' | 'aggressive' | 'strategist';
 
 export interface PlayerState {
   id: string;

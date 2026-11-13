@@ -170,10 +170,10 @@ export class RoomManager {
       const botsNeeded = Math.max(0, room.maxPlayers - room.state.players.size);
       for (let i = 0; i < botsNeeded; i++) {
         const botId = `bot_${Date.now()}_${i + 1}`;
-        const botNames = ['MechaBomber', 'CyberBot', 'DynamiteAI', 'BlastDroid', 'NitroX', 'Sparky', 'GigaBomb'];
+        const botNames = ['Sentinela', 'Vanguarda', 'Estrategista', 'BlastDroid', 'NitroX', 'Sparky', 'GigaBomb'];
         const name = botNames[i % botNames.length];
-        room.state.addPlayer(botId, name, true);
-        room.bots.set(botId, new BotAI(botId));
+        const botPlayer = room.state.addPlayer(botId, name, true);
+        room.bots.set(botId, new BotAI(botId, botPlayer.botPersonality));
       }
     }
 

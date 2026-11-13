@@ -689,22 +689,26 @@
       image-rendering: pixelated;
     }
 
-    /* Spectator Bar & Compact Keybind Footer */
-    #spectator-bar {
+    /* Spectator & Game Over Bottom Bars (never cover arena canvas) */
+    #spectator-bar,
+    #gameover-bar {
       display: none;
       width: 100%;
       max-width: 720px;
       background-color: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-top: none;
-      padding: 8px 14px;
+      border-radius: 0 0 var(--radius) var(--radius);
+      padding: 10px 14px;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      flex-shrink: 0;
     }
 
-    #spectator-bar.active {
+    #spectator-bar.active,
+    #gameover-bar.active {
       display: flex;
     }
 
@@ -714,9 +718,46 @@
       color: var(--text-muted);
     }
 
+    .gameover-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .gameover-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 7px;
+      border-radius: var(--radius);
+      text-transform: uppercase;
+    }
+
+    .gameover-badge.draw {
+      color: var(--text-muted);
+      border-color: var(--border-active);
+    }
+
+    .gameover-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-main);
+    }
+
+    .gameover-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
     .spectator-actions {
       display: flex;
       gap: 8px;
+      margin-left: auto;
     }
 
     .controls-footer {
@@ -737,25 +778,97 @@
       gap: 8px;
     }
 
-    /* Touch Controls */
+    body.is-game-over .controls-footer,
+    body.is-game-over #touch-controls {
+      display: none !important;
+    }
+
+    /* Touch Controls with Technical Virtual Joystick */
     #touch-controls {
       display: none;
       width: 100%;
       max-width: 720px;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 18px;
+      padding: 12px 22px;
       margin-top: 4px;
       touch-action: none;
       flex-shrink: 0;
     }
 
-    .dpad {
-      display: grid;
-      grid-template-columns: repeat(3, 52px);
-      grid-template-rows: repeat(3, 52px);
-      gap: 4px;
+    .joystick-zone {
+      width: 136px;
+      height: 136px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      position: relative;
+      cursor: grab;
+    }
+
+    .joystick-ring {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-active);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.12s ease;
+      pointer-events: none;
+    }
+
+    .joystick-zone.active .joystick-ring {
+      border-color: var(--accent);
+    }
+
+    .joystick-tick {
+      position: absolute;
+      background-color: #2E2E36;
+      pointer-events: none;
+    }
+
+    .joystick-tick.tick-n { width: 2px; height: 8px; top: 6px; left: 50%; transform: translateX(-50%); }
+    .joystick-tick.tick-s { width: 2px; height: 8px; bottom: 6px; left: 50%; transform: translateX(-50%); }
+    .joystick-tick.tick-w { width: 8px; height: 2px; left: 6px; top: 50%; transform: translateY(-50%); }
+    .joystick-tick.tick-e { width: 8px; height: 2px; right: 6px; top: 50%; transform: translateY(-50%); }
+
+    .joystick-knob {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-color: #1A1A1E;
+      border: 1.5px solid var(--border-active);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.08s ease-out, border-color 0.1s ease, background-color 0.1s ease;
+      pointer-events: none;
+    }
+
+    .joystick-knob::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+      transition: background-color 0.1s ease;
+    }
+
+    .joystick-zone.active .joystick-knob {
+      transition: border-color 0.1s ease, background-color 0.1s ease;
+      border-color: var(--accent);
+      background-color: #142620;
+    }
+
+    .joystick-zone.active .joystick-knob::after {
+      background-color: var(--accent);
     }
 
     .touch-btn {
@@ -777,18 +890,10 @@
       color: var(--accent);
     }
 
-    .touch-btn svg {
-      width: 18px;
-      height: 18px;
-      stroke: currentColor;
-      stroke-width: 1.5;
-      fill: none;
-    }
-
     .bomb-action-btn {
-      width: 88px;
-      height: 88px;
-      border-radius: var(--radius);
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
       background-color: var(--bg-surface);
       border: 1px solid var(--border-active);
       font-family: 'JetBrains Mono', monospace;
@@ -802,122 +907,6 @@
       border-color: var(--danger);
       color: var(--danger);
       background-color: var(--bg-surface-hover);
-    }
-
-    /* Modal */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(10, 10, 11, 0.88);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 200;
-    }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    .modal-box {
-      background-color: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius);
-      padding: 28px;
-      max-width: 440px;
-      width: 90%;
-      text-align: center;
-    }
-
-    .modal-tag {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--accent);
-      border: 1px solid var(--accent);
-      padding: 2px 8px;
-      border-radius: var(--radius);
-      display: inline-block;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-    }
-
-    .modal-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.35rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      margin-bottom: 10px;
-      color: var(--text-main);
-    }
-
-    .modal-winner {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.92rem;
-      color: var(--text-main);
-      margin-bottom: 12px;
-      line-height: 1.5;
-    }
-
-    .modal-winner-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background-color: var(--bg-main);
-      border: 1px solid var(--border-active);
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      margin: 10px 0 16px;
-      text-align: left;
-    }
-
-    .modal-winner-card canvas {
-      width: 60px;
-      height: 60px;
-      aspect-ratio: 1 / 1;
-      display: block;
-      image-rendering: pixelated;
-      flex-shrink: 0;
-    }
-
-    .modal-winner-info {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .modal-winner-badge {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.68rem;
-      color: var(--accent);
-      font-weight: 600;
-      letter-spacing: 0.05em;
-    }
-
-    .modal-winner-name {
-      font-family: 'Space Grotesk', sans-serif;
-      font-weight: 700;
-      font-size: 1.1rem;
-      color: var(--text-main);
-    }
-
-    .modal-stats {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      border-top: 1px solid var(--border-subtle);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 10px 0;
-      margin-bottom: 22px;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
     }
 
     /* Fullscreen Mode (desktop & mobile) */
@@ -955,6 +944,7 @@
 
     body.is-fullscreen #hud,
     body.is-fullscreen #spectator-bar,
+    body.is-fullscreen #gameover-bar,
     body.is-fullscreen .controls-footer {
       max-width: none;
       width: 100%;
@@ -1065,19 +1055,21 @@
         border-right: none;
       }
 
-      body.in-game #spectator-bar {
+      body.in-game #spectator-bar,
+      body.in-game #gameover-bar {
         max-width: none;
         width: 100%;
+        border-radius: 0;
         border-left: none;
         border-right: none;
-        padding: 6px 10px;
+        padding: 10px 14px;
       }
 
       body.in-game #touch-controls {
         max-width: none;
         width: 100%;
         margin-top: 0;
-        padding: 10px 18px 14px;
+        padding: 10px 22px 14px;
         border-top: 1px solid var(--border-subtle);
         background-color: var(--bg-main);
       }
@@ -1187,16 +1179,23 @@
         background-color: transparent;
         pointer-events: none;
       }
-      body.in-game #touch-controls .dpad,
+      body.in-game #touch-controls .joystick-zone,
       body.in-game #touch-controls #btn-bomb,
-      body.is-fullscreen #touch-controls .dpad,
+      body.is-fullscreen #touch-controls .joystick-zone,
       body.is-fullscreen #touch-controls #btn-bomb {
         pointer-events: auto;
       }
-      .dpad {
-        grid-template-columns: repeat(3, 46px);
-        grid-template-rows: repeat(3, 46px);
-        gap: 3px;
+      .joystick-zone {
+        width: 112px;
+        height: 112px;
+      }
+      .joystick-ring {
+        width: 100px;
+        height: 100px;
+      }
+      .joystick-knob {
+        width: 42px;
+        height: 42px;
       }
       .bomb-action-btn {
         width: 78px;
@@ -1450,32 +1449,34 @@
         </div>
       </div>
 
+      <div id="gameover-bar">
+        <div class="gameover-info">
+          <span id="gameover-badge" class="gameover-badge">Vitória</span>
+          <span id="gameover-title" class="gameover-title">Operador_01</span>
+          <span id="gameover-sub" class="gameover-sub">0 abates</span>
+        </div>
+        <div class="spectator-actions">
+          <button id="btn-play-again" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.84rem;">Jogar Novamente</button>
+          <button id="btn-back-lobby" class="btn btn-secondary" style="padding: 8px 12px; font-size: 0.84rem;">Menu</button>
+        </div>
+      </div>
+
       <div class="controls-footer">
         <span>MOVIMENTO: WASD / SETAS</span>
         <span>BOMBA: ESPAÇO / J</span>
-        <span>REINICIAR: R (AO SER ELIMINADO)</span>
+        <span>REINICIAR: R (AO FINAL / ELIMINADO)</span>
       </div>
 
-      <!-- Clean Technical Touch Controls -->
+      <!-- Clean Technical Touch Controls (Virtual Joystick + Bomb Button) -->
       <div id="touch-controls">
-        <div class="dpad">
-          <div></div>
-          <button id="btn-up" class="touch-btn" aria-label="Mover para cima">
-            <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
-          </button>
-          <div></div>
-          <button id="btn-left" class="touch-btn" aria-label="Mover para a esquerda">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          </button>
-          <div></div>
-          <button id="btn-right" class="touch-btn" aria-label="Mover para a direita">
-            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-          <div></div>
-          <button id="btn-down" class="touch-btn" aria-label="Mover para baixo">
-            <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </button>
-          <div></div>
+        <div id="joystick-zone" class="joystick-zone" aria-label="Joystick de movimento">
+          <div class="joystick-ring">
+            <span class="joystick-tick tick-n"></span>
+            <span class="joystick-tick tick-s"></span>
+            <span class="joystick-tick tick-w"></span>
+            <span class="joystick-tick tick-e"></span>
+            <div id="joystick-knob" class="joystick-knob"></div>
+          </div>
         </div>
         <div>
           <button id="btn-bomb" class="touch-btn bomb-action-btn">BOMBA</button>
@@ -1483,27 +1484,6 @@
       </div>
     </div>
   </main>
-
-  <!-- Modal End Game -->
-  <div id="modal-gameover" class="modal-overlay">
-    <div class="modal-box">
-      <span class="modal-tag">Resultado Oficial</span>
-      <div id="modal-title" class="modal-title">Partida Encerrada</div>
-      <div id="modal-winner" class="modal-winner">Resultado verificado pelo sistema.</div>
-      <div id="modal-winner-card" class="modal-winner-card" style="display: none;">
-        <canvas id="modal-winner-canvas" width="60" height="60"></canvas>
-        <div class="modal-winner-info">
-          <span class="modal-winner-badge">SOBREVIVENTE CAMPEÃO</span>
-          <div id="modal-winner-name" class="modal-winner-name">Operador</div>
-        </div>
-      </div>
-      <div id="modal-stats" class="modal-stats">ABATES: 0 • ARENA: RUÍNAS</div>
-      <div class="modal-actions">
-        <button id="btn-play-again" class="btn btn-primary">Iniciar Nova Rodada</button>
-        <button id="btn-back-lobby" class="btn btn-secondary">Retornar ao Menu</button>
-      </div>
-    </div>
-  </div>
 
   <script type="module" src="/main.ts"></script>
 </body>

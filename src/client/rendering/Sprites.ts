@@ -585,7 +585,7 @@ export class Sprites {
       return;
     }
 
-    if (isInvincible && Math.floor(animTime * 15) % 2 === 0) {
+    if (isInvincible && !isWinner && Math.floor(animTime * 15) % 2 === 0) {
       return;
     }
 

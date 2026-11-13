@@ -39,12 +39,23 @@ export class InputHandler {
       this.keys[e.code] = false;
     });
 
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickKnob = document.getElementById('joystick-knob');
+
+    const resetJoystickVisual = () => {
+      joystickZone?.classList.remove('active');
+      if (joystickKnob) {
+        joystickKnob.style.transform = 'translate(0px, 0px)';
+      }
+    };
+
     const resetAll = () => {
       this.keys = {};
       this.bombPressed = false;
       this.touchDx = 0;
       this.touchDy = 0;
       this.touchBomb = false;
+      resetJoystickVisual();
     };
 
     window.addEventListener('blur', resetAll);
@@ -52,32 +63,37 @@ export class InputHandler {
       if (document.hidden) resetAll();
     });
 
-    this.bindTouchControls();
+    this.bindTouchControls(joystickZone, joystickKnob, resetJoystickVisual);
   }
 
-  private bindTouchControls(): void {
-    const dpad = document.querySelector('.dpad') as HTMLElement | null;
-    const btnUp = document.getElementById('btn-up');
-    const btnDown = document.getElementById('btn-down');
-    const btnLeft = document.getElementById('btn-left');
-    const btnRight = document.getElementById('btn-right');
-
-    const updateDpadVisuals = (dx: number, dy: number) => {
-      btnUp?.classList.toggle('active', dy < 0);
-      btnDown?.classList.toggle('active', dy > 0);
-      btnLeft?.classList.toggle('active', dx < 0);
-      btnRight?.classList.toggle('active', dx > 0);
-    };
-
-    const setDpadFromPoint = (clientX: number, clientY: number) => {
-      if (!dpad) return;
-      const rect = dpad.getBoundingClientRect();
+  private bindTouchControls(
+    joystickZone: HTMLElement | null,
+    joystickKnob: HTMLElement | null,
+    resetJoystickVisual: () => void
+  ): void {
+    const setJoystickFromPoint = (clientX: number, clientY: number) => {
+      if (!joystickZone) return;
+      const rect = joystickZone.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       const dxPx = clientX - cx;
       const dyPx = clientY - cy;
+      const dist = Math.hypot(dxPx, dyPx);
+      const maxRadius = Math.max(26, rect.width * 0.28);
 
-      if (Math.hypot(dxPx, dyPx) < 10) {
+      // Move visual knob smoothly in 360 degrees clamped to outer ring
+      if (joystickKnob) {
+        const clamped = Math.min(dist, maxRadius);
+        const angle = Math.atan2(dyPx, dxPx);
+        const kx = dist > 0.5 ? Math.cos(angle) * clamped : 0;
+        const ky = dist > 0.5 ? Math.sin(angle) * clamped : 0;
+        joystickKnob.style.transform = `translate(${kx.toFixed(1)}px, ${ky.toFixed(1)}px)`;
+      }
+
+      joystickZone.classList.add('active');
+
+      // Deadzone & responsive primary-axis grid mapping (pairs seamlessly with corner-rounding)
+      if (dist < 10) {
         this.touchDx = 0;
         this.touchDy = 0;
       } else if (Math.abs(dxPx) >= Math.abs(dyPx)) {
@@ -87,34 +103,33 @@ export class InputHandler {
         this.touchDx = 0;
         this.touchDy = dyPx > 0 ? 1 : -1;
       }
-      updateDpadVisuals(this.touchDx, this.touchDy);
     };
 
-    const clearDpad = () => {
+    const clearJoystick = () => {
       this.touchDx = 0;
       this.touchDy = 0;
-      updateDpadVisuals(0, 0);
+      resetJoystickVisual();
     };
 
-    if (dpad) {
+    if (joystickZone) {
       let activeTouchId: number | null = null;
       let mouseDragging = false;
 
-      dpad.addEventListener('touchstart', (e) => {
+      joystickZone.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (activeTouchId === null && e.changedTouches.length > 0) {
           const t = e.changedTouches[0];
           activeTouchId = t.identifier;
-          setDpadFromPoint(t.clientX, t.clientY);
+          setJoystickFromPoint(t.clientX, t.clientY);
         }
       }, { passive: false });
 
-      dpad.addEventListener('touchmove', (e) => {
+      joystickZone.addEventListener('touchmove', (e) => {
         e.preventDefault();
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
           if (t.identifier === activeTouchId) {
-            setDpadFromPoint(t.clientX, t.clientY);
+            setJoystickFromPoint(t.clientX, t.clientY);
             break;
           }
         }
@@ -125,27 +140,27 @@ export class InputHandler {
           if (e.changedTouches[i].identifier === activeTouchId) {
             e.preventDefault();
             activeTouchId = null;
-            clearDpad();
+            clearJoystick();
             break;
           }
         }
       };
 
-      dpad.addEventListener('touchend', handleTouchEnd, { passive: false });
-      dpad.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+      joystickZone.addEventListener('touchend', handleTouchEnd, { passive: false });
+      joystickZone.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
-      dpad.addEventListener('mousedown', (e) => {
+      joystickZone.addEventListener('mousedown', (e) => {
         e.preventDefault();
         mouseDragging = true;
-        setDpadFromPoint(e.clientX, e.clientY);
+        setJoystickFromPoint(e.clientX, e.clientY);
       });
       window.addEventListener('mousemove', (e) => {
-        if (mouseDragging) setDpadFromPoint(e.clientX, e.clientY);
+        if (mouseDragging) setJoystickFromPoint(e.clientX, e.clientY);
       });
       window.addEventListener('mouseup', () => {
         if (mouseDragging) {
           mouseDragging = false;
-          clearDpad();
+          clearJoystick();
         }
       });
     }
